@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef, useMemo, use } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 import {
   Stage,
@@ -9,6 +9,7 @@ import {
   Circle,
   Star,
   Arrow,
+  Line,
   Transformer,
 } from "react-konva";
 import { KonvaEventObject } from "konva/lib/Node";
@@ -67,8 +68,19 @@ const exportCanvasAsPNG = (stageRef: any, drawingName: string = 'canvas') => {
     console.error('Failed to export canvas:', error);
   }
 };
+
+type ToolMode = "select" | "draw";
+
 // --- Controller Component ---
-const Controller = ({ onAddShape }: { onAddShape: (type: string) => void }) => {
+const Controller = ({
+  onAddShape,
+  activeTool,
+  onSelectTool,
+}: {
+  onAddShape: (type: string) => void;
+  activeTool: ToolMode;
+  onSelectTool: (tool: ToolMode) => void;
+}) => {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -87,6 +99,12 @@ const Controller = ({ onAddShape }: { onAddShape: (type: string) => void }) => {
 
   const tools = [
     {
+      id: "select",
+      name: "Select",
+      type: "action",
+      Icon: MousePointer2,
+    },
+    {
       id: "shapes",
       name: "Shapes",
       type: "dropdown",
@@ -100,8 +118,8 @@ const Controller = ({ onAddShape }: { onAddShape: (type: string) => void }) => {
     },
     {
       id: "pen",
-      name: "pen",
-      type: "",
+      name: "Draw",
+      type: "action",
       Icon: Pen,
     },
   ];
@@ -114,12 +132,18 @@ const Controller = ({ onAddShape }: { onAddShape: (type: string) => void }) => {
       {tools.map((tool) => (
         <div key={tool.id} className="relative">
           <button
-            onClick={() =>
-              tool.type === "dropdown"
-                ? setOpenDropdown(openDropdown === tool.id ? null : tool.id)
-                : setOpenDropdown(null)
-            }
-            className={`p-2 rounded-lg hover:bg-muted flex flex-col items-center min-w-12.5 transition-colors ${openDropdown === tool.id ? "bg-muted" : ""}`}
+            onClick={() => {
+              if (tool.type === "dropdown") {
+                setOpenDropdown(openDropdown === tool.id ? null : tool.id);
+                onSelectTool("select");
+                return;
+              }
+
+              setOpenDropdown(null);
+              if (tool.id === "pen") onSelectTool("draw");
+              if (tool.id === "select") onSelectTool("select");
+            }}
+            className={`p-2 rounded-lg hover:bg-muted flex flex-col items-center min-w-12.5 transition-colors ${(openDropdown === tool.id || (tool.id === "pen" && activeTool === "draw") || (tool.id === "select" && activeTool === "select")) ? "bg-muted" : ""}`}
           >
             <tool.Icon className="w-5 h-5" />
             <span className="text-[10px] mt-1 font-medium">{tool.name}</span>
@@ -166,6 +190,7 @@ const ShapeRenderer = ({
   onSelect,
   onDragEnd,
   updateObj,
+  isInteractionEnabled,
 }: any) => {
   const shapeRef = useRef<any>(null);
 
@@ -217,27 +242,47 @@ const ShapeRenderer = ({
 
   const commonProps = {
     ...obj,
+    id: obj.id,
     ref: shapeRef,
-    onClick: (e: any) => {
-      e.cancelBubble = true;
-      onSelect(obj.id);
-    },
-    onDragEnd: (e: any) => onDragEnd(obj.id, e.target.x(), e.target.y()),
-    onTransformEnd: (e: any) => {
-      const node = shapeRef.current;
-      updateObj(obj.id, {
-        x: node.x(),
-        y: node.y(),
-        scaleX: node.scaleX(),
-        scaleY: node.scaleY(),
-        rotation: node.rotation(),
-      });
-    },
+    draggable: isInteractionEnabled && obj.draggable !== false,
+    listening: isInteractionEnabled && obj.listening !== false,
+    onClick: isInteractionEnabled
+      ? (e: any) => {
+          e.cancelBubble = true;
+          onSelect(obj.id);
+        }
+      : undefined,
+    onDragEnd: isInteractionEnabled
+      ? (e: any) => onDragEnd(obj.id, e.target.x(), e.target.y())
+      : undefined,
+    onTransformEnd: isInteractionEnabled
+      ? () => {
+          const node = shapeRef.current;
+          updateObj(obj.id, {
+            x: node.x(),
+            y: node.y(),
+            scaleX: node.scaleX(),
+            scaleY: node.scaleY(),
+            rotation: node.rotation(),
+          });
+        }
+      : undefined,
   };
 
   if (obj.type === "rect") return <Rect {...commonProps} />;
   if (obj.type === "circle") return <Circle {...commonProps} />;
   if (obj.type === "star") return <Star {...commonProps} />;
+  if (obj.type === "line")
+    return (
+      <Line
+        {...commonProps}
+        points={obj.points || []}
+        stroke={obj.stroke || "#111827"}
+        strokeWidth={obj.strokeWidth || 3}
+        lineCap="round"
+        lineJoin="round"
+      />
+    );
   if (obj.type === "arrow")
     return (
       <Arrow
@@ -253,13 +298,27 @@ const ShapeRenderer = ({
 };
 
 // --- Canvas Component ---
-function Canvas({ objects, setObjects, drawings, currentDrawingId }: { objects: any[]; setObjects: any; drawings: any[]; currentDrawingId: string | null }) {
+function Canvas({
+  objects,
+  setObjects,
+  drawings,
+  currentDrawingId,
+  activeTool,
+}: {
+  objects: any[];
+  setObjects: any;
+  drawings: any[];
+  currentDrawingId: string | null;
+  activeTool: ToolMode;
+}) {
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawingLineId, setDrawingLineId] = useState<string | null>(null);
   const [history, setHistory] = useState<any[]>([]);
   const [clipboard, setClipboard] = useState<any>(null);
   const [redoStack, setRedoStack] = useState<any[]>([]); // For RedoF
@@ -302,7 +361,16 @@ function Canvas({ objects, setObjects, drawings, currentDrawingId }: { objects: 
     setCanvasBoard((prev: any) => ({ ...prev, currentStage }));
   }, [currentStage]);
 
+  useEffect(() => {
+    if (activeTool === "draw") {
+      setSelectedId(null);
+      trRef.current?.nodes([]);
+    }
+  }, [activeTool]);
+
   const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
+    if (activeTool === "draw") return;
+
     if (e.target === e.target.getStage()) setSelectedId(null);
 
     if (CanvasBoard?.pendingShape) {
@@ -497,9 +565,49 @@ function Canvas({ objects, setObjects, drawings, currentDrawingId }: { objects: 
           scaleY={scale}
           x={stagePos.x}
           y={stagePos.y}
-          draggable={CanvasBoard?.scaleLock ? false : true}
-          onMouseDown={(e) => e.evt.button === 1 && setIsPanning(true)}
-          onMouseUp={() => setIsPanning(false)}
+          draggable={activeTool === "draw" ? false : !CanvasBoard?.scaleLock}
+          style={{ cursor: activeTool === "draw" ? "crosshair" : "default" }}
+          onMouseDown={(e) => {
+            const stage = e.target.getStage();
+            if (!stage) return;
+
+            const pointer = stage.getPointerPosition();
+            if (!pointer) return;
+
+            if (activeTool === "draw") {
+              if (e.evt.button !== 0) return;
+
+              const x = (pointer.x - stagePos.x) / scale;
+              const y = (pointer.y - stagePos.y) / scale;
+              const lineId = `line-${uuidv4()}`;
+
+              setObjects((prev: any[]) => [
+                ...prev,
+                {
+                  id: lineId,
+                  type: "line",
+                  points: [x, y, x, y],
+                  stroke: "#111827",
+                  strokeWidth: 3,
+                  draggable: true,
+                  listening: true,
+                },
+              ]);
+
+              setDrawingLineId(lineId);
+              setIsDrawing(true);
+              return;
+            }
+
+            if (e.evt.button === 1) setIsPanning(true);
+          }}
+          onMouseUp={() => {
+            setIsPanning(false);
+            if (activeTool === "draw") {
+              setIsDrawing(false);
+              setDrawingLineId(null);
+            }
+          }}
           onWheel={(e) => {
             if (CanvasBoard?.scaleLock) return;
             e.evt.preventDefault();
@@ -519,12 +627,22 @@ function Canvas({ objects, setObjects, drawings, currentDrawingId }: { objects: 
           }}
           onClick={handleStageClick}
           onMouseMove={(e) => {
-            const pointer = e.target.getStage()?.getPointerPosition();
+            const stage = e.target.getStage();
+            const pointer = stage?.getPointerPosition();
             if (pointer) {
-              setCursorPos({
-                x: (pointer.x - stagePos.x) / scale,
-                y: (pointer.y - stagePos.y) / scale,
-              });
+              const x = (pointer.x - stagePos.x) / scale;
+              const y = (pointer.y - stagePos.y) / scale;
+
+              setCursorPos({ x, y });
+
+              if (activeTool === "draw" && isDrawing && drawingLineId) {
+                setObjects((prev: any[]) =>
+                  prev.map((obj) => {
+                    if (obj.id !== drawingLineId) return obj;
+                    return { ...obj, points: [...obj.points, x, y] };
+                  }),
+                );
+              }
             }
           }}
         >
@@ -534,21 +652,24 @@ function Canvas({ objects, setObjects, drawings, currentDrawingId }: { objects: 
                 key={obj.id}
                 obj={obj}
                 onSelect={setSelectedId}
+                isInteractionEnabled={activeTool !== "draw"}
                 updateObj={updateObj}
                 onDragEnd={(id: string, x: number, y: number) =>
                   updateObj(id, { x, y })
                 }
               />
             ))}
-            <Transformer
-              ref={trRef}
-              borderStroke="#3b82f6"
-              anchorFill="#fff"
-              anchorStroke="#3b82f6"
-              anchorSize={8}
-            />
+            {activeTool !== "draw" && (
+              <Transformer
+                ref={trRef}
+                borderStroke="#3b82f6"
+                anchorFill="#fff"
+                anchorStroke="#3b82f6"
+                anchorSize={8}
+              />
+            )}
 
-            {CanvasBoard?.pendingShape && (
+            {CanvasBoard?.pendingShape && activeTool !== "draw" && (
               <Rect
                 x={cursorPos.x - 50}
                 y={cursorPos.y - 50}
@@ -702,6 +823,7 @@ function Canvas({ objects, setObjects, drawings, currentDrawingId }: { objects: 
 
 const CanvasBoard = () => {
   const [objects, setObjects] = useState<any[]>([]);
+  const [activeTool, setActiveTool] = useState<ToolMode>("select");
   const { CanvasBoard, setCanvasBoard } = useCanvasState() as any;
   const { drawings, currentDrawingId, setCurrentDrawingId, updateCurrentDrawing } = useDrawings();
 
@@ -742,11 +864,25 @@ const CanvasBoard = () => {
   return (
     <>
       <div className="w-screen h-screen overflow-hidden bg-background">
-        <Canvas objects={objects} setObjects={updateObjectsAndPersist} drawings={drawings} currentDrawingId={currentDrawingId} />
+        <Canvas
+          objects={objects}
+          setObjects={updateObjectsAndPersist}
+          drawings={drawings}
+          currentDrawingId={currentDrawingId}
+          activeTool={activeTool}
+        />
         <Controller
-          onAddShape={(type) =>
-            setCanvasBoard((prev: any) => ({ ...prev, pendingShape: type }))
-          }
+          activeTool={activeTool}
+          onSelectTool={(tool) => {
+            setActiveTool(tool);
+            if (tool === "draw") {
+              setCanvasBoard((prev: any) => ({ ...prev, pendingShape: null }));
+            }
+          }}
+          onAddShape={(type) => {
+            setActiveTool("select");
+            setCanvasBoard((prev: any) => ({ ...prev, pendingShape: type }));
+          }}
         />
         
         <div className="fixed top-4 right-4 bg-background px-3 py-2 rounded border border-border z-50 shadow-sm flex items-center gap-3">

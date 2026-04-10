@@ -59,7 +59,9 @@ export function useDrawingsManager() {
     yArray.observe(observer);
     
     // Initial sync
-    setDrawings(yArray.toArray() as Drawing[]);
+    const initialDrawings = yArray.toArray() as Drawing[];
+    drawingsRef.current = initialDrawings;
+    setDrawings(initialDrawings);
 
     // Save to localStorage on changes with status tracking
     const saver = () => {
