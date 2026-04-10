@@ -16,8 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "wireboard - Wireframing Tool",
   description: "A board for fast ideation and production-ready documents.",
+  icons: {
+    icon: "/logo.png",
+  },
 };
-  
+
 export default function RootLayout({
   children,
 }: Readonly<{
