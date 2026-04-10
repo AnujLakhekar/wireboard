@@ -1,16 +1,22 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  BookOpen,
+  Search,
+  FileText,
+  CalendarDays,
+  Sparkles,
+  Settings,
+  Trash2,
+  Archive,
   ChevronRight,
+  Star,
+  Plus,
   ChevronsUpDown,
-  Folder,
-  Home,
   Moon,
-  SlidersHorizontal,
   Sun,
   Touchpad,
 } from "lucide-react";
@@ -41,233 +47,194 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { DrawingsList } from "@/components/drawings-list";
+import { AutoSaveInfo } from "@/components/auto-save-info";
 
 type ThemeMode = "light" | "dark" | "system";
-
 const THEME_STORAGE_KEY = "wireboard-theme";
 
-const platformItems = [
-  {
-    title: "Playground",
-    href: "/",
-    icon: Home,
-    children: [
-      { title: "History", href: "/history" },
-      { title: "Starred", href: "/starred" },
-      { title: "Settings", href: "/playground/settings" },
-    ],
-  },
-  { title: "Models", href: "/models", icon: Folder },
-  { title: "Documentation", href: "/documentation", icon: BookOpen },
-  { title: "Settings", href: "/settings", icon: SlidersHorizontal },
-];
-
+// Helper function from your code
 function applyTheme(mode: ThemeMode) {
+  if (typeof window === "undefined") return;
   const root = document.documentElement;
   const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const shouldUseDark = mode === "dark" || (mode === "system" && prefersDark);
   root.classList.toggle("dark", shouldUseDark);
 }
 
+const platformItems = [
+  { title: "Search", href: "/app/search", icon: Search },
+  { title: "All docs", href: "/app/docs", icon: FileText },
+  { title: "Journals", href: "/app/journals", icon: CalendarDays },
+  { title: "Intelligence", href: "/app/ai", icon: Sparkles },
+  { title: "Settings", href: "/app/settings", icon: Settings },
+];
+
 export function AppSidebar() {
   const pathname = usePathname();
-  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
   const [compactMode, setCompactMode] = useState(false);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
-    Playground:
-      pathname === "/" ||
-      pathname.startsWith("/history") ||
-      pathname.startsWith("/starred") ||
-      pathname.startsWith("/playground"),
-  }));
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem(
-      THEME_STORAGE_KEY,
-    ) as ThemeMode | null;
-    const initialTheme = savedTheme ?? "system";
-    setThemeMode(initialTheme);
-    applyTheme(initialTheme);
-  }, []);
+  
+  // Theme State Logic
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") return "system";
+    return (localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode) ?? "system";
+  });
 
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
     applyTheme(themeMode);
 
-    if (themeMode !== "system") {
-      return;
-    }
-
+    if (themeMode !== "system") return;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handleThemeChange = () => applyTheme("system");
-
     media.addEventListener("change", handleThemeChange);
     return () => media.removeEventListener("change", handleThemeChange);
   }, [themeMode]);
 
-  const isActive = (href: string) => {
-    if (href === "/") {
-      return pathname === "/";
-    }
-
-    return pathname === href || pathname.startsWith(`${href}/`);
-  };
-
-  const toggleGroup = (key: string) => {
-    setOpenGroups((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <Sidebar collapsible="offcanvas" className="border-r">
-      <SidebarHeader className="border-b border-sidebar-border/70 px-3 py-2.5">
-        <button className="flex w-full items-center gap-3 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-sidebar-accent/70">
-          <div className="grid size-9 place-items-center rounded-xl bg-blue-600 text-white shadow-sm ring-1 ring-blue-500/60">
-            <Folder className="size-4" />
+    <Sidebar 
+      collapsible="offcanvas" 
+      className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+    >
+      {/* HEADER: Workspace Switcher */}
+      <SidebarHeader className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="size-6 rounded bg-linear-to-br from-cyan-400 to-emerald-400 shadow-lg shadow-emerald-500/20" />
+            <span className="text-sm font-semibold text-sidebar-foreground">Wireboard</span>
           </div>
-          <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-sm font-semibold">Acme Inc</p>
-            <p className="truncate text-xs text-muted-foreground">Enterprise</p>
-          </div>
-          <ChevronsUpDown className="size-4 text-muted-foreground" />
-        </button>
+          <button className="rounded p-1 transition-colors hover:bg-sidebar-accent">
+            <ChevronRight className="size-4 text-sidebar-foreground/60" />
+          </button>
+        </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-3">
+      <SidebarContent className="scrollbar-hide">
+        {/* SECTION 1: PLATFORM */}
         <SidebarGroup>
-          <SidebarGroupLabel className="px-2 text-sm">
+          <SidebarGroupLabel className="px-2 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/60">
             Platform
           </SidebarGroupLabel>
           <SidebarMenu>
-            {platformItems.map((item) => {
-              const isExpanded = openGroups[item.title] ?? false;
-              const hasChildren = Boolean(item.children?.length);
-
-              return (
-                <SidebarMenuItem key={item.title}>
-                  <div className="flex items-center gap-1">
-                    <SidebarMenuButton
-                      isActive={isActive(item.href)}
-                      asChild
-                      className={cn(
-                        "flex-1",
-                        compactMode ? "h-7 text-xs" : "h-8 text-sm",
-                      )}
-                    >
-                      <Link href={item.href} className="justify-start gap-2.5">
-                        <item.icon className="size-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-
-                    {hasChildren ? (
-                      <button
-                        type="button"
-                        onClick={() => toggleGroup(item.title)}
-                        className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                        aria-expanded={isExpanded}
-                        aria-label={`${isExpanded ? "Collapse" : "Expand"} ${item.title}`}
-                      >
-                        <ChevronRight
-                          className={cn(
-                            "size-4 transition-transform duration-200",
-                            isExpanded && "rotate-90",
-                          )}
-                        />
-                      </button>
-                    ) : (
-                      <ChevronRight className="mr-1 size-4 text-muted-foreground" />
+            {platformItems.map((item) => (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive(item.href)}
+                  className={cn(
+                    "transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    isActive(item.href) && "bg-sidebar-accent text-sidebar-accent-foreground",
+                    compactMode ? "h-7" : "h-9"
+                  )}
+                >
+                  <Link href={item.href} className="flex items-center gap-3 px-2">
+                    <item.icon className="size-4 opacity-70" />
+                    <span className={cn("font-medium", compactMode ? "text-xs" : "text-[13px]")}>
+                      {item.title}
+                    </span>
+                    {item.title === "Search" && (
+                       <Plus className="ml-auto size-4 text-sidebar-foreground/50 hover:text-sidebar-foreground/80" />
                     )}
-                  </div>
-
-                  {hasChildren && isExpanded ? (
-                    <SidebarMenuSub>
-                      {item.children?.map((child) => (
-                        <SidebarMenuSubItem key={child.title}>
-                          <SidebarMenuSubButton
-                            isActive={isActive(child.href)}
-                            asChild
-                          >
-                            <Link href={child.href}>{child.title}</Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  ) : null}
-                </SidebarMenuItem>
-              );
-            })}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
           </SidebarMenu>
         </SidebarGroup>
+
+        {/* SECTION 2: DRAWINGS */}
+        <SidebarGroup className="mt-4">
+          <SidebarGroupLabel className="px-2 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/60">
+            My Drawings
+          </SidebarGroupLabel>
+          <div className="px-2">
+            <DrawingsList />
+          </div>
+        </SidebarGroup>
+
+        {/* SECTION 3: FAVORITES (Matching reference image) */}
+        <SidebarGroup className="mt-4">
+          <SidebarGroupLabel className="flex cursor-default items-center gap-1 px-2 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/60">
+            Favorites <ChevronRight className="size-3 rotate-90" />
+          </SidebarGroupLabel>
+          <div className="flex flex-col items-center justify-center py-8 opacity-40">
+            <div className="mb-3 flex size-10 items-center justify-center rounded-full border border-dashed border-sidebar-border">
+              <Star className="size-4 text-sidebar-foreground/60" />
+            </div>
+            <p className="text-[12px] font-medium text-sidebar-foreground/60">No favorites</p>
+          </div>
+        </SidebarGroup>
+
+        {/* SECTION 4: ORGANIZATION GROUPS */}
+        {["Organize", "Tags", "Collections"].map((label) => (
+          <SidebarGroup key={label} className="py-1">
+            <SidebarGroupLabel className="group flex cursor-pointer items-center gap-1 px-2 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground/80">
+              {label} <ChevronRight className="size-3 transition-transform group-hover:translate-x-0.5" />
+            </SidebarGroupLabel>
+          </SidebarGroup>
+        ))}
+
+        {/* AUTO-SAVE INFO */}
+        <div className="flex-1" />
+        <AutoSaveInfo />
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border/70 p-3">
-        <div className="flex items-center gap-3 rounded-md px-1 py-1.5">
-          <div className="grid size-9 place-items-center rounded-full border border-sidebar-border bg-linear-to-br from-cyan-500 via-fuchsia-500 to-orange-400 text-xs font-bold text-white">
+      {/* FOOTER: User Profile & Theme Controls */}
+      <SidebarFooter className="border-t border-sidebar-border p-3">
+        <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent/40 p-2 ring-1 ring-sidebar-border">
+          <div className="grid size-8 place-items-center rounded-full border border-sidebar-border bg-linear-to-br from-sidebar-accent to-sidebar text-[10px] font-bold text-sidebar-foreground/80">
             SH
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-sm font-semibold">shadcn</p>
-            <p className="truncate text-xs text-muted-foreground">
-              m@example.com
-            </p>
+            <p className="truncate text-sm font-medium text-sidebar-foreground">Creator</p>
+            <p className="truncate text-[11px] text-sidebar-foreground/60">Free Plan</p>
           </div>
 
           <Menubar className="h-auto border-0 bg-transparent p-0 shadow-none">
             <MenubarMenu>
-              <MenubarTrigger className="grid size-8 place-items-center rounded-md border border-transparent p-0 text-muted-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent">
+              <MenubarTrigger className="grid size-7 place-items-center rounded-md text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent">
                 <ChevronsUpDown className="size-4" />
               </MenubarTrigger>
-              <MenubarContent align="end" className="w-56">
-                <MenubarLabel>Profile</MenubarLabel>
-                <MenubarSeparator />
-                <MenubarItem>
-                  Account settings
-                  <MenubarShortcut>⌘,</MenubarShortcut>
+              <MenubarContent align="end" className="w-56 border-border bg-popover text-popover-foreground">
+                <MenubarLabel className="text-muted-foreground">Profile</MenubarLabel>
+                <MenubarSeparator className="bg-border" />
+                <MenubarItem className="cursor-pointer focus:bg-accent focus:text-accent-foreground">
+                  Account settings <MenubarShortcut className="text-muted-foreground">⌘,</MenubarShortcut>
                 </MenubarItem>
-                <MenubarItem>Invite member</MenubarItem>
-                <MenubarSeparator />
+                <MenubarSeparator className="bg-border" />
+                
                 <MenubarCheckboxItem
                   checked={compactMode}
-                  onCheckedChange={(checked) =>
-                    setCompactMode(Boolean(checked))
-                  }
+                  onCheckedChange={(checked) => setCompactMode(Boolean(checked))}
+                  className="cursor-pointer focus:bg-accent"
                 >
-                  <div className="flex flex-row justify-start gap-3">
-                    <Touchpad className="size-4" /> Compact navigation
+                  <div className="flex items-center gap-2">
+                    <Touchpad className="size-4" /> Compact Nav
                   </div>
                 </MenubarCheckboxItem>
+
                 <MenubarSub>
-                  <MenubarSubTrigger>
-                    {themeMode === "dark" ? (
-                      <Moon className="size-4" />
-                    ) : (
-                      <Sun className="size-4" />
-                    )}
+                  <MenubarSubTrigger className="cursor-pointer focus:bg-accent">
+                    {themeMode === "dark" ? <Moon className="mr-2 size-4" /> : <Sun className="mr-2 size-4" />}
                     Theme
                   </MenubarSubTrigger>
-                  <MenubarSubContent>
+                  <MenubarSubContent className="border-border bg-popover">
                     <MenubarRadioGroup
                       value={themeMode}
-                      onValueChange={(value) =>
-                        setThemeMode(value as ThemeMode)
-                      }
+                      onValueChange={(v) => setThemeMode(v as ThemeMode)}
                     >
-                      <MenubarRadioItem value="light">Light</MenubarRadioItem>
-                      <MenubarRadioItem value="dark">Dark</MenubarRadioItem>
-                      <MenubarRadioItem value="system">System</MenubarRadioItem>
+                      <MenubarRadioItem value="light" className="focus:bg-accent">Light</MenubarRadioItem>
+                      <MenubarRadioItem value="dark" className="focus:bg-accent">Dark</MenubarRadioItem>
+                      <MenubarRadioItem value="system" className="focus:bg-accent">System</MenubarRadioItem>
                     </MenubarRadioGroup>
                   </MenubarSubContent>
                 </MenubarSub>
-                <MenubarSeparator />
-                <MenubarItem>Sign out</MenubarItem>
+                <MenubarSeparator className="bg-border" />
+                <MenubarItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">Sign out</MenubarItem>
               </MenubarContent>
             </MenubarMenu>
           </Menubar>

@@ -1,3 +1,5 @@
+"use client";
+
 import { Geist, Geist_Mono } from "next/font/google"
 import "../../globals.css"
 
@@ -6,6 +8,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
+import { DrawingsProvider } from "@/providers/DrawingsProvider"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -26,16 +29,18 @@ export default function RootLayout({
     <div
       className={`${geistSans.variable} ${geistMono.variable} h-screen flex antialiased`}
     >
-      <SidebarProvider>
-        {/* LEFT SIDE */}
-        <AppSidebar />
+      <DrawingsProvider>
+        <SidebarProvider>
+          {/* LEFT SIDE */}
+          <AppSidebar />
 
-        {/* RIGHT SIDE */}
-        <main className="flex-1 p-4">
-          <SidebarTrigger />
-          {children}
-        </main>
-      </SidebarProvider>
+          {/* RIGHT SIDE */}
+          <main className="flex-1 p-4">
+            <SidebarTrigger />
+            {children}
+          </main>
+        </SidebarProvider>
+      </DrawingsProvider>
     </div>
   )
 }
