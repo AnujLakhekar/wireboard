@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as Y from "yjs";
 
 const STORAGE_KEY = "wireboard-stage-data";
+const LOCAL_STORAGE_SAVE_INTERVAL = 5000;
 
 export function useCanvasPersistence(setObjects: (data: any[]) => void) {
   const [doc] = useState(() => new Y.Doc());
   const [isInitialized, setIsInitialized] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // 1. Load from LocalStorage on Mount
@@ -36,19 +38,28 @@ export function useCanvasPersistence(setObjects: (data: any[]) => void) {
     setObjects(uniqueInitial);
     setIsInitialized(true);
 
-    // 3. Save to LocalStorage on every Yjs change
+    // 3. Save to LocalStorage with debounce to avoid write pressure while drawing
     const saver = () => {
-      if (typeof window !== "undefined") {
-        const stateUpdate = Y.encodeStateAsUpdate(doc);
-        const base64 = btoa(String.fromCharCode(...stateUpdate));
-        localStorage.setItem(STORAGE_KEY, base64);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
       }
+
+      saveTimeoutRef.current = setTimeout(() => {
+        if (typeof window !== "undefined") {
+          const stateUpdate = Y.encodeStateAsUpdate(doc);
+          const base64 = btoa(String.fromCharCode(...stateUpdate));
+          localStorage.setItem(STORAGE_KEY, base64);
+        }
+      }, LOCAL_STORAGE_SAVE_INTERVAL);
     };
     doc.on("update", saver);
 
     return () => {
       yArray.unobserve(observer);
       doc.off("update", saver);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
     };
   }, [doc, setObjects]);
 

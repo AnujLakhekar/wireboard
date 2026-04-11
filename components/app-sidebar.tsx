@@ -5,16 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  Search,
   FileText,
-  CalendarDays,
-  Sparkles,
-  Settings,
-  Trash2,
-  Archive,
   ChevronRight,
   Star,
-  Plus,
   ChevronsUpDown,
   Moon,
   Sun,
@@ -64,13 +57,7 @@ function applyTheme(mode: ThemeMode) {
   root.classList.toggle("dark", shouldUseDark);
 }
 
-const platformItems = [
-  { title: "Search", href: "/app/search", icon: Search },
-  { title: "All docs", href: "/app/docs", icon: FileText },
-  { title: "Journals", href: "/app/journals", icon: CalendarDays },
-  { title: "Intelligence", href: "/app/ai", icon: Sparkles },
-  { title: "Settings", href: "/app/settings", icon: Settings },
-];
+const platformItems = [{ title: "Board", href: "/app", icon: FileText }];
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -136,9 +123,6 @@ export function AppSidebar() {
                     <span className={cn("font-medium", compactMode ? "text-xs" : "text-[13px]")}>
                       {item.title}
                     </span>
-                    {item.title === "Search" && (
-                       <Plus className="ml-auto size-4 text-sidebar-foreground/50 hover:text-sidebar-foreground/80" />
-                    )}
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -168,19 +152,6 @@ export function AppSidebar() {
             <p className="text-[12px] font-medium text-sidebar-foreground/60">No favorites</p>
           </div>
         </SidebarGroup>
-
-        {/* SECTION 4: ORGANIZATION GROUPS */}
-        {["Organize", "Tags", "Collections"].map((label) => (
-          <SidebarGroup key={label} className="py-1">
-            <SidebarGroupLabel className="group flex cursor-pointer items-center gap-1 px-2 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/60 transition-colors hover:text-sidebar-foreground/80">
-              {label} <ChevronRight className="size-3 transition-transform group-hover:translate-x-0.5" />
-            </SidebarGroupLabel>
-          </SidebarGroup>
-        ))}
-
-        {/* AUTO-SAVE INFO */}
-        <div className="flex-1" />
-        <AutoSaveInfo />
       </SidebarContent>
 
       {/* FOOTER: User Profile & Theme Controls */}
@@ -190,8 +161,8 @@ export function AppSidebar() {
             SH
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-sm font-medium text-sidebar-foreground">Creator</p>
-            <p className="truncate text-[11px] text-sidebar-foreground/60">Free Plan</p>
+            <p className="truncate text-sm font-medium text-sidebar-foreground">Localuser</p>
+            <p className="truncate text-[11px] text-sidebar-foreground/60">storage in use: 0 MB</p>
           </div>
 
           <Menubar className="h-auto border-0 bg-transparent p-0 shadow-none">

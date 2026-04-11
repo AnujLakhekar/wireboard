@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { DrawingsProvider } from "@/providers/DrawingsProvider"
-import { MobileSupportBlocker } from "@/components/mobile-support-blocker"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,23 +26,21 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <MobileSupportBlocker>
-      <div
-        className={`${geistSans.variable} ${geistMono.variable} h-screen flex antialiased`}
-      >
-        <DrawingsProvider>
-          <SidebarProvider>
-            {/* LEFT SIDE */}
-            <AppSidebar />
+    <div
+      className={`${geistSans.variable} ${geistMono.variable} h-screen flex antialiased`}
+    >
+      <DrawingsProvider>
+        <SidebarProvider>
+          {/* LEFT SIDE */}
+          <AppSidebar />
 
-            {/* RIGHT SIDE */}
-            <main className="flex-1 p-4">
-              <SidebarTrigger />
-              {children}
-            </main>
-          </SidebarProvider>
-        </DrawingsProvider>
-      </div>
-    </MobileSupportBlocker>
+          {/* RIGHT SIDE */}
+          <main className="flex-1 p-4">
+            <SidebarTrigger />
+            {children}
+          </main>
+        </SidebarProvider>
+      </DrawingsProvider>
+    </div>
   )
 }
