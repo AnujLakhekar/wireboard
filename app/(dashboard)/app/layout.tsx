@@ -35,8 +35,10 @@ export default function RootLayout({
           <AppSidebar />
 
           {/* RIGHT SIDE */}
-          <main className="flex-1 p-4">
-            <SidebarTrigger />
+          <main className="relative flex-1 overflow-hidden">
+            <div className="absolute top-3 left-3 z-50 md:hidden">
+              <SidebarTrigger />
+            </div>
             {children}
           </main>
         </SidebarProvider>

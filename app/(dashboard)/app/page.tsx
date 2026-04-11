@@ -78,6 +78,15 @@ type ToolMode = "select" | "draw";
 type BrushStyle = "solid" | "dashed" | "dotted";
 type DrawTool = "brush" | "eraser";
 
+const CANVAS_BACKGROUND_PRESETS = [
+  { label: "White", value: "#ffffff" },
+  { label: "Soft", value: "#f8fafc" },
+  { label: "Muted", value: "#f1f5f9" },
+  { label: "Paper", value: "#fafaf9" },
+  { label: "Slate", value: "#e2e8f0" },
+  { label: "Dark", value: "#18181b" },
+];
+
 const brushStyleToDash = (style: BrushStyle): number[] => {
   if (style === "dashed") return [12, 8];
   if (style === "dotted") return [2, 10];
@@ -308,19 +317,6 @@ const CanvasSpriteShape = ({ obj, commonProps }: { obj: any; commonProps: any })
   const [image, status] = useImage(obj.src || "");
   const spriteRef = useRef<any>(null);
 
-  if (!image) {
-    return (
-      <Rect
-        {...commonProps}
-        width={obj.width || 74}
-        height={obj.height || 122}
-        fill={status === "failed" ? "#ef4444" : "#93c5fd"}
-        stroke="#111827"
-        dash={[4, 4]}
-      />
-    );
-  }
-
   useEffect(() => {
     if (!spriteRef.current || !image) return;
     spriteRef.current.start();
@@ -336,6 +332,19 @@ const CanvasSpriteShape = ({ obj, commonProps }: { obj: any; commonProps: any })
       return () => clearTimeout(timeout);
     }
   }, [obj.animation, obj.punchNonce, obj]);
+
+  if (!image) {
+    return (
+      <Rect
+        {...commonProps}
+        width={obj.width || 74}
+        height={obj.height || 122}
+        fill={status === "failed" ? "#ef4444" : "#93c5fd"}
+        stroke="#111827"
+        dash={[4, 4]}
+      />
+    );
+  }
 
   return (
     <Sprite
@@ -391,11 +400,15 @@ const ShapeRenderer = React.memo(({
   // Handle Animations
   useEffect(() => {
     if (!obj) return;
+    const node = shapeRef.current;
+    const layer = node?.getLayer?.();
+    if (!node || !layer) return;
+
     let anim: Konva.Animation | undefined;
     if (obj.animation === "spin") {
       anim = new Konva.Animation((frame) => {
         if (shapeRef.current) shapeRef.current.rotation(frame!.time * 0.1);
-      }, shapeRef.current.getLayer());
+      }, layer);
       anim.start();
     } else if (obj.animation === "pulse") {
       anim = new Konva.Animation((frame) => {
@@ -403,7 +416,7 @@ const ShapeRenderer = React.memo(({
           const scale = 1 + Math.sin(frame!.time * 0.005) * 0.1;
           shapeRef.current.scale({ x: scale, y: scale });
         }
-      }, shapeRef.current.getLayer());
+      }, layer);
       anim.start();
     }
     return () => {
@@ -441,6 +454,7 @@ const ShapeRenderer = React.memo(({
     onTransformEnd: isInteractionEnabled
       ? () => {
           const node = shapeRef.current;
+          if (!node) return;
           updateObj(obj.id, {
             x: node.x(),
             y: node.y(),
@@ -551,6 +565,7 @@ function Canvas({
   const mediaTargetIdRef = useRef<string | null>(null);
   const router = useRouter();
   const { CanvasBoard, setCanvasBoard } = useCanvasState() as any;
+  const [canvasBackground, setCanvasBackground] = useState("#f8fafc");
 
   useEffect(() => {
     const updateSize = () =>
@@ -630,6 +645,12 @@ function Canvas({
       trRef.current?.nodes([]);
     }
   }, [activeTool]);
+
+  useEffect(() => {
+    const stage = currentStage.current;
+    if (!stage) return;
+    stage.container().style.backgroundColor = canvasBackground;
+  }, [canvasBackground]);
 
   const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
     if (activeTool === "draw") return;
@@ -777,6 +798,92 @@ function Canvas({
     event.target.value = "";
   };
 
+  const addImageFromUrl = () => {
+    const source = window.prompt("Paste image URL");
+    if (!source) return;
+
+    let normalizedSource = source.trim();
+    try {
+      normalizedSource = new URL(normalizedSource).toString();
+    } catch {
+      window.alert("Please enter a valid URL.");
+      return;
+    }
+
+    const image = new window.Image();
+    image.crossOrigin = "anonymous";
+
+    image.onload = () => {
+      const canvasWidth = size.width || window.innerWidth;
+      const canvasHeight = size.height || window.innerHeight;
+      const ratio = Math.min(
+        (canvasWidth - 40) / image.width,
+        (canvasHeight - 40) / image.height,
+        1,
+      );
+
+      setObjects((prev: any[]) => [
+        ...prev,
+        {
+          id: `image-${uuidv4()}`,
+          type: "image",
+          x: cursorPos.x || canvasWidth / 2,
+          y: cursorPos.y || canvasHeight / 2,
+          width: Math.round(image.width * ratio),
+          height: Math.round(image.height * ratio),
+          src: normalizedSource,
+          draggable: true,
+        },
+      ]);
+    };
+
+    image.onerror = () => {
+      window.alert("Could not load image from this URL.");
+    };
+
+    image.src = normalizedSource;
+  };
+
+  const replaceSelectedMediaFromUrl = () => {
+    if (!selectedObject || !isSelectedMedia) return;
+
+    const source = window.prompt("Paste image URL", selectedObject.src || "");
+    if (!source) return;
+
+    let normalizedSource = source.trim();
+    try {
+      normalizedSource = new URL(normalizedSource).toString();
+    } catch {
+      window.alert("Please enter a valid URL.");
+      return;
+    }
+
+    const image = new window.Image();
+    image.crossOrigin = "anonymous";
+
+    image.onload = () => {
+      const canvasWidth = size.width || window.innerWidth;
+      const canvasHeight = size.height || window.innerHeight;
+      const ratio = Math.min(
+        (canvasWidth - 40) / image.width,
+        (canvasHeight - 40) / image.height,
+        1,
+      );
+
+      updateObj(selectedObject.id, {
+        src: normalizedSource,
+        width: Math.round(image.width * ratio),
+        height: Math.round(image.height * ratio),
+      });
+    };
+
+    image.onerror = () => {
+      window.alert("Could not load image from this URL.");
+    };
+
+    image.src = normalizedSource;
+  };
+
   const rotateSelectedMedia = (delta: number) => {
     if (!selectedObject || !isSelectedMedia) return;
     updateObj(selectedObject.id, { rotation: (selectedObject.rotation || 0) + delta });
@@ -899,6 +1006,95 @@ function Canvas({
         draggable: true,
       },
     ]);
+  };
+
+  const addImageFromDataUrl = (dataUrl: string, pointer?: { x: number; y: number }) => {
+    const image = new window.Image();
+    image.onload = () => {
+      const canvasWidth = size.width || window.innerWidth;
+      const canvasHeight = size.height || window.innerHeight;
+      const ratio = Math.min(
+        (canvasWidth - 40) / image.width,
+        (canvasHeight - 40) / image.height,
+        1,
+      );
+
+      const x = pointer ? (pointer.x - stagePos.x) / scale : cursorPos.x || canvasWidth / 2;
+      const y = pointer ? (pointer.y - stagePos.y) / scale : cursorPos.y || canvasHeight / 2;
+
+      setObjects((prev: any[]) => [
+        ...prev,
+        {
+          id: `image-${uuidv4()}`,
+          type: "image",
+          x,
+          y,
+          width: Math.round(image.width * ratio),
+          height: Math.round(image.height * ratio),
+          src: dataUrl,
+          draggable: true,
+        },
+      ]);
+    };
+    image.src = dataUrl;
+  };
+
+  const handleCanvasDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
+    const stage = currentStage.current;
+    if (!stage) return;
+
+    stage.setPointersPositions(event.nativeEvent as unknown as MouseEvent);
+    const pointer = stage.getPointerPosition() || {
+      x: event.clientX,
+      y: event.clientY,
+    };
+
+    const droppedFile = event.dataTransfer.files?.[0];
+    if (droppedFile && droppedFile.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = String(ev.target?.result || "");
+        if (!dataUrl) return;
+        addImageFromDataUrl(dataUrl, pointer);
+      };
+      reader.readAsDataURL(droppedFile);
+      return;
+    }
+
+    const uri = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
+    if (!uri) return;
+
+    const maybeUrl = uri.trim();
+    if (!/^https?:\/\//i.test(maybeUrl)) return;
+
+    const image = new window.Image();
+    image.crossOrigin = "anonymous";
+    image.onload = () => {
+      const canvasWidth = size.width || window.innerWidth;
+      const canvasHeight = size.height || window.innerHeight;
+      const ratio = Math.min(
+        (canvasWidth - 40) / image.width,
+        (canvasHeight - 40) / image.height,
+        1,
+      );
+
+      setObjects((prev: any[]) => [
+        ...prev,
+        {
+          id: `image-${uuidv4()}`,
+          type: "image",
+          x: (pointer.x - stagePos.x) / scale,
+          y: (pointer.y - stagePos.y) / scale,
+          width: Math.round(image.width * ratio),
+          height: Math.round(image.height * ratio),
+          src: maybeUrl,
+          draggable: true,
+        },
+      ]);
+    };
+    image.src = maybeUrl;
   };
 
   const markForGrouping = () => {
@@ -1165,7 +1361,11 @@ function Canvas({
 
   return (
     <ContextMenu>
-      <ContextMenuTrigger className="w-full h-full block">
+      <ContextMenuTrigger
+        className="w-full h-full block"
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={handleCanvasDrop}
+      >
         <Stage
           ref={currentStage}
           width={size.width}
@@ -1257,6 +1457,14 @@ function Canvas({
           }}
         >
           <Layer>
+            <Rect
+              x={-stagePos.x / scale}
+              y={-stagePos.y / scale}
+              width={size.width / scale}
+              height={size.height / scale}
+              fill={canvasBackground}
+              listening={false}
+            />
             {objects.map((obj) => (
               <ShapeRenderer
                 key={obj.id}
@@ -1297,9 +1505,25 @@ function Canvas({
       </ContextMenuTrigger>
 
       <ContextMenuContent className="w-56">
+        <ContextMenuSub>
+          <ContextMenuSubTrigger>Canvas Background</ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-40">
+            {CANVAS_BACKGROUND_PRESETS.map((preset) => (
+              <ContextMenuItem key={preset.value} onClick={() => setCanvasBackground(preset.value)}>
+                <div
+                  className="w-4 h-4 rounded-full mr-2 border border-border"
+                  style={{ backgroundColor: preset.value }}
+                />
+                {preset.label}
+              </ContextMenuItem>
+            ))}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+        <ContextMenuSeparator />
         {selectedId ? (
           <>
             <ContextMenuItem onClick={() => addCanvasItem("image")}>Add Image</ContextMenuItem>
+            <ContextMenuItem onClick={addImageFromUrl}>Add Image From URL</ContextMenuItem>
             <ContextMenuItem onClick={() => addCanvasItem("sprite")}>Add Sprite</ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -1438,6 +1662,7 @@ function Canvas({
                 <ContextMenuSubTrigger>Media</ContextMenuSubTrigger>
                 <ContextMenuSubContent>
                   <ContextMenuItem onClick={openMediaPicker}>Load/Replace Image</ContextMenuItem>
+                  <ContextMenuItem onClick={replaceSelectedMediaFromUrl}>Replace From URL</ContextMenuItem>
                   <ContextMenuItem onClick={() => rotateSelectedMedia(-90)}>Rotate -90°</ContextMenuItem>
                   <ContextMenuItem onClick={() => rotateSelectedMedia(90)}>Rotate +90°</ContextMenuItem>
                   <ContextMenuItem onClick={() => flipSelectedMedia("x")}>Flip Horizontal</ContextMenuItem>
@@ -1488,6 +1713,7 @@ function Canvas({
             <ContextMenuItem onClick={() => addCanvasItem("text")}>Add Text</ContextMenuItem>
             <ContextMenuItem onClick={() => addCanvasItem("wedge")}>Add Wedge</ContextMenuItem>
             <ContextMenuItem onClick={() => addCanvasItem("image")}>Add Image</ContextMenuItem>
+            <ContextMenuItem onClick={addImageFromUrl}>Add Image From URL</ContextMenuItem>
             <ContextMenuItem onClick={() => addCanvasItem("sprite")}>Add Sprite</ContextMenuItem>
             <ContextMenuSeparator />
             {groupDraftIds.length >= 2 && (
@@ -1496,14 +1722,14 @@ function Canvas({
             <ContextMenuSeparator />
             <ContextMenuItem
               onClick={() => {
-                const canvas = document.querySelector('canvas');
-                if (canvas) {
-                  const link = document.createElement('a');
-                  link.href = canvas.toDataURL('image/png');
-                  const drawingName = drawings.find((d) => d.id === currentDrawingId)?.name || 'canvas';
-                  link.download = `${drawingName}-${Date.now()}.png`;
-                  link.click();
-                }
+                const stage = currentStage.current;
+                if (!stage) return;
+
+                const link = document.createElement('a');
+                link.href = stage.toDataURL({ pixelRatio: 2 });
+                const drawingName = drawings.find((d) => d.id === currentDrawingId)?.name || 'canvas';
+                link.download = `${drawingName}-${Date.now()}.png`;
+                link.click();
               }}
             >
               Export Canvas
@@ -1578,7 +1804,7 @@ const CanvasBoard = () => {
 
   return (
     <>
-      <div className="w-screen h-screen overflow-hidden bg-background">
+      <div className="relative w-full h-full overflow-hidden bg-background">
         <Canvas
           objects={objects}
           setObjects={setObjects}
