@@ -48,6 +48,12 @@ import { AutoSaveInfo } from "@/components/auto-save-info";
 type ThemeMode = "light" | "dark" | "system";
 const THEME_STORAGE_KEY = "wireboard-theme";
 
+type StorageInfo = {
+  bytes: number;
+  kb: string;
+  mb: string;
+};
+
 // Helper function from your code
 function applyTheme(mode: ThemeMode) {
   if (typeof window === "undefined") return;
@@ -62,7 +68,35 @@ const platformItems = [{ title: "Board", href: "/app", icon: FileText }];
 export function AppSidebar() {
   const pathname = usePathname();
   const [compactMode, setCompactMode] = useState(false);
-  
+  const [storage, setStorage] = useState<StorageInfo | null>(null);
+
+  function RandomNameGenerator() {
+    if (localStorage.getItem("randomName")) {
+      return localStorage.getItem("randomName")!;
+    }
+    const adjectives = ["Swift", "Silent", "Mighty", "Brave", "Clever"];
+    const nouns = ["Eagle", "Tiger", "Shark", "Panther", "Wolf"];
+    const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const noun = nouns[Math.floor(Math.random() * nouns.length)];
+    const randomName = `${adjective}${noun}`;
+
+    localStorage.setItem("randomName", randomName);
+    return randomName;
+  }
+
+  React.useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.storage) return;
+
+    navigator.storage.estimate().then(({ usage, quota }) => {
+      const bytes = usage ?? 0;
+      const kb = (bytes / 1024).toFixed(2) + " KB";
+      const mb = (bytes / (1024 * 1024)).toFixed(2) + " MB";
+      console.log("Used:", (bytes / 1024 / 1024).toFixed(2), "MB");
+      console.log("Quota:", ((quota ?? 0) / 1024 / 1024).toFixed(2), "MB");
+      setStorage({ bytes, kb, mb });
+    });
+  }, []);
+
   // Theme State Logic
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") return "system";
@@ -80,19 +114,22 @@ export function AppSidebar() {
     return () => media.removeEventListener("change", handleThemeChange);
   }, [themeMode]);
 
-  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
+  const isActive = (href: string) =>
+    pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <Sidebar 
-      collapsible="offcanvas" 
-      className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+    <Sidebar
+      collapsible="offcanvas"
+      className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground "
     >
       {/* HEADER: Workspace Switcher */}
       <SidebarHeader className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="size-6 rounded bg-linear-to-br from-cyan-400 to-emerald-400 shadow-lg shadow-emerald-500/20" />
-            <span className="text-sm font-semibold text-sidebar-foreground">Wireboard</span>
+            <span className="text-sm font-semibold text-sidebar-foreground">
+              Wireboard
+            </span>
           </div>
           <button className="rounded p-1 transition-colors hover:bg-sidebar-accent">
             <ChevronRight className="size-4 text-sidebar-foreground/60" />
@@ -114,13 +151,22 @@ export function AppSidebar() {
                   isActive={isActive(item.href)}
                   className={cn(
                     "transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                    isActive(item.href) && "bg-sidebar-accent text-sidebar-accent-foreground",
-                    compactMode ? "h-7" : "h-9"
+                    isActive(item.href) &&
+                      "bg-sidebar-accent text-sidebar-accent-foreground",
+                    compactMode ? "h-7" : "h-9",
                   )}
                 >
-                  <Link href={item.href} className="flex items-center gap-3 px-2">
+                  <Link
+                    href={item.href}
+                    className="flex items-center gap-3 px-2"
+                  >
                     <item.icon className="size-4 opacity-70" />
-                    <span className={cn("font-medium", compactMode ? "text-xs" : "text-[13px]")}>
+                    <span
+                      className={cn(
+                        "font-medium",
+                        compactMode ? "text-xs" : "text-[13px]",
+                      )}
+                    >
                       {item.title}
                     </span>
                   </Link>
@@ -149,7 +195,9 @@ export function AppSidebar() {
             <div className="mb-3 flex size-10 items-center justify-center rounded-full border border-dashed border-sidebar-border">
               <Star className="size-4 text-sidebar-foreground/60" />
             </div>
-            <p className="text-[12px] font-medium text-sidebar-foreground/60">No favorites</p>
+            <p className="text-[12px] font-medium text-sidebar-foreground/60">
+              No favorites
+            </p>
           </div>
         </SidebarGroup>
       </SidebarContent>
@@ -161,8 +209,12 @@ export function AppSidebar() {
             SH
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <p className="truncate text-sm font-medium text-sidebar-foreground">Localuser</p>
-            <p className="truncate text-[11px] text-sidebar-foreground/60">storage in use: 0 MB</p>
+            <p className="truncate text-sm font-medium text-sidebar-foreground">
+              Localuser
+            </p>
+            <p className="truncate text-[11px] text-sidebar-foreground/60">
+              storage in use: {storage && storage.mb}
+            </p>
           </div>
 
           <Menubar className="h-auto border-0 bg-transparent p-0 shadow-none">
@@ -170,17 +222,27 @@ export function AppSidebar() {
               <MenubarTrigger className="grid size-7 place-items-center rounded-md text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent">
                 <ChevronsUpDown className="size-4" />
               </MenubarTrigger>
-              <MenubarContent align="end" className="w-56 border-border bg-popover text-popover-foreground">
-                <MenubarLabel className="text-muted-foreground">Profile</MenubarLabel>
+              <MenubarContent
+                align="end"
+                className="w-56 border-border bg-popover text-popover-foreground"
+              >
+                <MenubarLabel className="text-muted-foreground">
+                  Profile
+                </MenubarLabel>
                 <MenubarSeparator className="bg-border" />
                 <MenubarItem className="cursor-pointer focus:bg-accent focus:text-accent-foreground">
-                  Account settings <MenubarShortcut className="text-muted-foreground">⌘,</MenubarShortcut>
+                  Account settings{" "}
+                  <MenubarShortcut className="text-muted-foreground">
+                    ⌘,
+                  </MenubarShortcut>
                 </MenubarItem>
                 <MenubarSeparator className="bg-border" />
-                
+
                 <MenubarCheckboxItem
                   checked={compactMode}
-                  onCheckedChange={(checked) => setCompactMode(Boolean(checked))}
+                  onCheckedChange={(checked) =>
+                    setCompactMode(Boolean(checked))
+                  }
                   className="cursor-pointer focus:bg-accent"
                 >
                   <div className="flex items-center gap-2">
@@ -190,7 +252,11 @@ export function AppSidebar() {
 
                 <MenubarSub>
                   <MenubarSubTrigger className="cursor-pointer focus:bg-accent">
-                    {themeMode === "dark" ? <Moon className="mr-2 size-4" /> : <Sun className="mr-2 size-4" />}
+                    {themeMode === "dark" ? (
+                      <Moon className="mr-2 size-4" />
+                    ) : (
+                      <Sun className="mr-2 size-4" />
+                    )}
                     Theme
                   </MenubarSubTrigger>
                   <MenubarSubContent className="border-border bg-popover">
@@ -198,14 +264,31 @@ export function AppSidebar() {
                       value={themeMode}
                       onValueChange={(v) => setThemeMode(v as ThemeMode)}
                     >
-                      <MenubarRadioItem value="light" className="focus:bg-accent">Light</MenubarRadioItem>
-                      <MenubarRadioItem value="dark" className="focus:bg-accent">Dark</MenubarRadioItem>
-                      <MenubarRadioItem value="system" className="focus:bg-accent">System</MenubarRadioItem>
+                      <MenubarRadioItem
+                        value="light"
+                        className="focus:bg-accent"
+                      >
+                        Light
+                      </MenubarRadioItem>
+                      <MenubarRadioItem
+                        value="dark"
+                        className="focus:bg-accent"
+                      >
+                        Dark
+                      </MenubarRadioItem>
+                      <MenubarRadioItem
+                        value="system"
+                        className="focus:bg-accent"
+                      >
+                        System
+                      </MenubarRadioItem>
                     </MenubarRadioGroup>
                   </MenubarSubContent>
                 </MenubarSub>
                 <MenubarSeparator className="bg-border" />
-                <MenubarItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">Sign out</MenubarItem>
+                <MenubarItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                  Sign out
+                </MenubarItem>
               </MenubarContent>
             </MenubarMenu>
           </Menubar>

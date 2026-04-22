@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
+
 import {
   Stage,
   Layer,
@@ -14,6 +15,7 @@ import {
   Sprite,
   Image as KonvaImage,
   Transformer,
+  Image,
 } from "react-konva";
 import { KonvaEventObject } from "konva/lib/Node";
 import Konva from "konva";
@@ -35,12 +37,28 @@ import {
   Circle as CircleIcon,
   Lock,
   LockOpen,
+  Layers,
+  Layers2,
+  FolderKanban,
   MousePointer2,
   Square,
   Trash2,
   Copy,
+  Plus,
+  Pencil,
+  Check,
+  X,
+  ChevronUp,
+  ChevronDown,
+  Eye,
   PaintRoller,
   Ruler,
+  BringToFront,
+  SendToBack,
+  Group,
+  Ungroup,
+  MoveUp,
+  MoveDown,
   ArrowRightFromLine,
   EyeOff,
   Move,
@@ -48,29 +66,48 @@ import {
   Zap,
   Star as StarIcon,
   Pen,
+  Sliders,
+  Menu,
+  PanelLeftIcon,
 } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 
 import { useCanvasState } from "@/providers/CanvasStateProvider";
 import { useCanvasPersistence } from "@/hooks/use-canvas-persistence";
 import { useDrawings } from "@/providers/DrawingsProvider";
 import { AutoSaveIndicator } from "@/components/auto-save-indicator";
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { Slider } from "@/components/ui/slider";
 import useImage from "use-image";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Exporter = () => {
   return <></>;
 };
 // Export canvas as PNG
-const exportCanvasAsPNG = (stageRef: any, drawingName: string = 'canvas') => {
+const exportCanvasAsPNG = (stageRef: any, drawingName: string = "canvas") => {
   if (!stageRef?.current) return;
   try {
     const dataURL = stageRef.current.toDataURL();
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = dataURL;
     link.download = `${drawingName}-${Date.now()}.png`;
     link.click();
   } catch (error) {
-    console.error('Failed to export canvas:', error);
+    console.error("Failed to export canvas:", error);
   }
 };
 
@@ -119,80 +156,96 @@ const Controller = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const tools = [
-    {
-      id: "select",
-      name: "Select",
-      type: "action",
-      Icon: MousePointer2,
-    },
-    {
-      id: "shapes",
-      name: "Shapes",
-      type: "dropdown",
-      Icon: CircleIcon,
-      options: [
-        { id: "rect", name: "Rectangle", icon: Square },
-        { id: "circle", name: "Circle", icon: CircleIcon },
-        { id: "arrow", name: "Arrow", icon: ArrowRightFromLine },
-        { id: "star", name: "Star", icon: StarIcon },
-      ],
-    },
-    {
-      id: "pen",
-      name: "Draw",
-      type: "action",
-      Icon: Pen,
-    },
+  const shapeTools = [
+    { id: "rect", name: "Rectangle", icon: Square },
+    { id: "circle", name: "Circle", icon: CircleIcon },
+    { id: "arrow", name: "Arrow", icon: ArrowRightFromLine },
+    { id: "star", name: "Star", icon: StarIcon },
   ];
 
   return (
     <div
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-background p-2 rounded-xl shadow-2xl border border-border flex items-center gap-2 z-60"
       ref={dropdownRef}
+      className="fixed bottom-4 left-1/2 z-60 w-[min(70vw,26rem)] -translate-x-1/2"
     >
-      {tools.map((tool) => (
-        <div key={tool.id} className="relative">
-          <button
-            onClick={() => {
-              if (tool.type === "dropdown") {
-                setOpenDropdown(openDropdown === tool.id ? null : tool.id);
-                onSelectTool("select");
-                return;
-              }
+      <Card className="overflow-visible rounded-2xl border border-zinc-800/70 bg-zinc-950/90 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <CardContent className="p-0">
+          <div className="flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => onSelectTool("select")}
+              className={`grid size-10 place-items-center rounded-xl border transition-all ${activeTool === "select" ? "border-cyan-300/70 bg-cyan-500 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : "border-zinc-700/70 bg-zinc-900 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"}`}
+              aria-label="Select"
+            >
+              <MousePointer2 className="h-4 w-4" />
+            </button>
 
-              setOpenDropdown(null);
-              if (tool.id === "pen") onSelectTool("draw");
-              if (tool.id === "select") onSelectTool("select");
-            }}
-            className={`p-2 rounded-lg hover:bg-muted flex flex-col items-center min-w-12.5 transition-colors ${(openDropdown === tool.id || (tool.id === "pen" && activeTool === "draw") || (tool.id === "select" && activeTool === "select")) ? "bg-muted" : ""}`}
-          >
-            <tool.Icon className="w-5 h-5" />
-            <span className="text-[10px] mt-1 font-medium">{tool.name}</span>
-          </button>
-          {tool.type === "dropdown" && openDropdown === tool.id && (
-            <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-background border border-border rounded-lg shadow-xl p-1 min-w-35 flex flex-col gap-1 animate-in fade-in slide-in-from-bottom-2">
-              {tool.options?.map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => {
-                    onAddShape(opt.id);
-                    setOpenDropdown(null);
-                  }}
-                  className="flex items-center gap-3 px-3 py-2 hover:bg-muted rounded-md text-sm transition-colors text-left"
-                >
-                  {opt.icon ? (
-                    <opt.icon className="w-4 h-4" />
-                  ) : (
-                    <Square className="w-4 h-4 opacity-50" />
-                  )}
-                  {opt.name}
-                </button>
-              ))}
+            <div className="h-7 w-px bg-zinc-800" />
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenDropdown(openDropdown === "shapes" ? null : "shapes")
+                }
+                className="flex h-10 items-center gap-2 rounded-xl border border-zinc-700/70 bg-zinc-900 px-3 text-xs font-medium text-zinc-100 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                aria-label="Shapes"
+              >
+                <Square className="h-4 w-4" />
+                Shapes
+              </button>
+
+              {openDropdown === "shapes" && (
+                <div className="absolute bottom-full left-0 mb-2 min-w-44 overflow-hidden rounded-xl border border-zinc-700/80 bg-zinc-950 p-1 shadow-[0_16px_40px_rgba(0,0,0,0.55)] animate-in fade-in slide-in-from-bottom-2">
+                  {shapeTools.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        onAddShape(opt.id);
+                        setOpenDropdown(null);
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-zinc-100 transition-colors hover:bg-zinc-800"
+                    >
+                      <opt.icon className="h-4 w-4" />
+                      {opt.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      ))}
+
+            <button
+              type="button"
+              onClick={() => onAddShape("arrow")}
+              className="grid size-10 place-items-center rounded-xl border border-zinc-700/70 bg-zinc-900 text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+              aria-label="Arrow"
+            >
+              <ArrowRightFromLine className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onAddShape("star")}
+              className="grid size-10 place-items-center rounded-xl border border-zinc-700/70 bg-zinc-900 text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+              aria-label="Star"
+            >
+              <StarIcon className="h-4 w-4" />
+            </button>
+
+            <div className="h-7 w-px bg-zinc-800" />
+
+            <button
+              type="button"
+              onClick={() => onSelectTool("draw")}
+              className={`grid size-10 place-items-center rounded-xl border transition-colors ${activeTool === "draw" ? "border-cyan-300/70 bg-cyan-500 text-white" : "border-zinc-700/70 bg-zinc-900 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"}`}
+              aria-label="Draw"
+            >
+              <Pen className="h-4 w-4" />
+            </button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
@@ -228,66 +281,88 @@ const BrushPanel = ({
 }) => {
   if (activeTool !== "draw") return null;
 
-  const colors = ["#111827", "#ef4444", "#2563eb", "#22c55e", "#f59e0b", "#8b5cf6"];
+  const colors = [
+    "#111827",
+    "#ef4444",
+    "#2563eb",
+    "#22c55e",
+    "#f59e0b",
+    "#8b5cf6",
+  ];
 
   return (
-    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-60 bg-background border border-border rounded-xl shadow-xl px-3 py-2 flex items-center gap-4">
-      <div className="flex items-center gap-1">
-        {(["brush", "eraser"] as DrawTool[]).map((tool) => (
-          <button
-            key={tool}
-            type="button"
-            onClick={() => onDrawToolChange(tool)}
-            className={`px-2 py-1 rounded-md text-xs border ${drawTool === tool ? "bg-muted border-primary" : "border-border hover:bg-muted"}`}
+    <Card className="fixed bottom-22 left-1/2 z-70 w-[min(95vw,46rem)] -translate-x-1/2 rounded-2xl border border-zinc-800/70 bg-zinc-950/90 shadow-[0_18px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <CardContent className="p-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Tabs
+            value={drawTool}
+            onValueChange={(value) => onDrawToolChange(value as DrawTool)}
+            className="min-w-40"
           >
-            {tool}
-          </button>
-        ))}
-      </div>
+            <TabsList className="grid h-8 w-full grid-cols-2 rounded-lg border border-zinc-800 bg-zinc-900/80">
+              <TabsTrigger value="brush">Brush</TabsTrigger>
+              <TabsTrigger value="eraser">Eraser</TabsTrigger>
+            </TabsList>
+          </Tabs>
 
-      <div className="flex items-center gap-2">
-        {colors.map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => onColorChange(value)}
-            className={`w-5 h-5 rounded-full border ${color === value ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}
-            style={{ backgroundColor: value }}
-            aria-label={`Brush color ${value}`}
-          />
-        ))}
-      </div>
+          <div className="flex items-center gap-1">
+            {colors.map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onColorChange(value)}
+                className={`size-6 rounded-full border border-zinc-600 transition-transform hover:scale-105 ${color === value ? "ring-2 ring-cyan-400" : ""}`}
+                style={{ backgroundColor: value }}
+                aria-label={`Brush color ${value}`}
+              />
+            ))}
+          </div>
 
-      <div className="flex items-center gap-2 min-w-35">
-        <span className="text-xs text-muted-foreground">Size</span>
-        <input
-          type="range"
-          min={1}
-          max={24}
-          value={size}
-          onChange={(e) => onSizeChange(Number(e.target.value))}
-          className="w-24"
-        />
-        <span className="text-xs w-5 text-right">{size}</span>
-      </div>
+          <div className="ml-auto flex min-w-42 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-2 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+              Size
+            </span>
+            <Slider
+              value={[size]}
+              min={1}
+              max={24}
+              step={1}
+              onValueChange={(value) => onSizeChange(value[0] ?? size)}
+              className="flex-1"
+            />
+            <Badge
+              variant="outline"
+              className="h-6 border-zinc-700 bg-zinc-950 px-2 text-[10px] text-zinc-200"
+            >
+              {size}px
+            </Badge>
+          </div>
 
-      <div className="flex items-center gap-1">
-        {(["solid", "dashed", "dotted"] as BrushStyle[]).map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onStyleChange(option)}
-            className={`px-2 py-1 rounded-md text-xs border ${style === option ? "bg-muted border-primary" : "border-border hover:bg-muted"}`}
-          >
-            {option}
-          </button>
-        ))}
-      </div>
-    </div>
+          <div className="flex items-center gap-1">
+            {(["solid", "dashed", "dotted"] as BrushStyle[]).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onStyleChange(option)}
+                className={`rounded-md border px-2.5 py-1 text-[10px] font-medium capitalize transition-colors ${style === option ? "border-zinc-100 bg-zinc-100 text-zinc-900" : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"}`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
-const CanvasImageShape = ({ obj, commonProps }: { obj: any; commonProps: any }) => {
+const CanvasImageShape = ({
+  obj,
+  commonProps,
+}: {
+  obj: any;
+  commonProps: any;
+}) => {
   const [image, status] = useImage(obj.src || "");
 
   if (!image) {
@@ -313,7 +388,13 @@ const CanvasImageShape = ({ obj, commonProps }: { obj: any; commonProps: any }) 
   );
 };
 
-const CanvasSpriteShape = ({ obj, commonProps }: { obj: any; commonProps: any }) => {
+const CanvasSpriteShape = ({
+  obj,
+  commonProps,
+}: {
+  obj: any;
+  commonProps: any;
+}) => {
   const [image, status] = useImage(obj.src || "");
   const spriteRef = useRef<any>(null);
 
@@ -362,166 +443,171 @@ const CanvasSpriteShape = ({ obj, commonProps }: { obj: any; commonProps: any })
 };
 
 // --- Shape Component (Handles Individual Animations and Filters) ---
-const ShapeRenderer = React.memo(({
-  id,
-  onSelect,
-  onDragEnd,
-  updateObj,
-  isInteractionEnabled,
-}: any) => {
-  const shapeRef = useRef<any>(null);
-  const obj = useCanvasStore((state) => state.objectsById[id]);
+const ShapeRenderer = React.memo(
+  ({ id, onSelect, onDragEnd, updateObj, isInteractionEnabled }: any) => {
+    const shapeRef = useRef<any>(null);
+    const obj = useCanvasStore((state) => state.objectsById[id]);
 
-  // Apply Filters
-  useEffect(() => {
-    if (!obj) return;
-    if (shapeRef.current) {
-      const filters = [];
-      if (obj.blur) filters.push(Konva.Filters.Blur);
-      if (obj.grayscale) filters.push(Konva.Filters.Grayscale);
-      if (obj.invert) filters.push(Konva.Filters.Invert);
+    // Apply Filters
+    useEffect(() => {
+      if (!obj) return;
+      if (shapeRef.current) {
+        const filters = [];
+        if (obj.blur) filters.push(Konva.Filters.Blur);
+        if (obj.grayscale) filters.push(Konva.Filters.Grayscale);
+        if (obj.invert) filters.push(Konva.Filters.Invert);
 
-      shapeRef.current.filters(filters);
-      if (obj.blur) shapeRef.current.blurRadius(obj.blurValue || 10);
+        shapeRef.current.filters(filters);
+        if (obj.blur) shapeRef.current.blurRadius(obj.blurValue || 10);
 
-      // Mandatory for Konva filters to work
-      shapeRef.current.cache();
-    }
-  }, [
-    obj?.blur,
-    obj?.grayscale,
-    obj?.invert,
-    obj?.blurValue,
-    obj?.fill,
-    obj?.width,
-    obj?.height,
-  ]);
+        // Mandatory for Konva filters to work
+        shapeRef.current.cache();
+      }
+    }, [
+      obj?.blur,
+      obj?.grayscale,
+      obj?.invert,
+      obj?.blurValue,
+      obj?.fill,
+      obj?.width,
+      obj?.height,
+    ]);
 
-  // Handle Animations
-  useEffect(() => {
-    if (!obj) return;
-    const node = shapeRef.current;
-    const layer = node?.getLayer?.();
-    if (!node || !layer) return;
+    // Handle Animations
+    useEffect(() => {
+      if (!obj) return;
+      const node = shapeRef.current;
+      const layer = node?.getLayer?.();
+      if (!node || !layer) return;
 
-    let anim: Konva.Animation | undefined;
-    if (obj.animation === "spin") {
-      anim = new Konva.Animation((frame) => {
-        if (shapeRef.current) shapeRef.current.rotation(frame!.time * 0.1);
-      }, layer);
-      anim.start();
-    } else if (obj.animation === "pulse") {
-      anim = new Konva.Animation((frame) => {
-        if (shapeRef.current) {
-          const scale = 1 + Math.sin(frame!.time * 0.005) * 0.1;
-          shapeRef.current.scale({ x: scale, y: scale });
-        }
-      }, layer);
-      anim.start();
-    }
-    return () => {
-      if (anim) anim.stop();
+      let anim: Konva.Animation | undefined;
+      if (obj.animation === "spin") {
+        anim = new Konva.Animation((frame) => {
+          if (shapeRef.current) shapeRef.current.rotation(frame!.time * 0.1);
+        }, layer);
+        anim.start();
+      } else if (obj.animation === "pulse") {
+        anim = new Konva.Animation((frame) => {
+          if (shapeRef.current) {
+            const scale = 1 + Math.sin(frame!.time * 0.005) * 0.1;
+            shapeRef.current.scale({ x: scale, y: scale });
+          }
+        }, layer);
+        anim.start();
+      }
+      return () => {
+        if (anim) anim.stop();
+      };
+    }, [obj?.animation]);
+
+    if (!obj) return null;
+
+    const commonProps: any = {
+      ...obj,
+      id: obj.id,
+      ref: shapeRef,
+      draggable: isInteractionEnabled && obj.draggable !== false,
+      listening: isInteractionEnabled && obj.listening !== false,
+      onClick: isInteractionEnabled
+        ? (e: any) => {
+            e.cancelBubble = true;
+            onSelect(
+              obj.id,
+              Boolean(e.evt?.shiftKey || e.evt?.ctrlKey || e.evt?.metaKey),
+            );
+          }
+        : undefined,
+      onDragEnd: isInteractionEnabled
+        ? (e: any) => onDragEnd(obj.id, e.target.x(), e.target.y())
+        : undefined,
+      onMouseEnter: isInteractionEnabled
+        ? () => {
+            document.body.style.cursor =
+              obj.type === "circle" ? "pointer" : "move";
+          }
+        : undefined,
+      onMouseLeave: isInteractionEnabled
+        ? () => {
+            document.body.style.cursor = "default";
+          }
+        : undefined,
+      onTransformEnd: isInteractionEnabled
+        ? () => {
+            const node = shapeRef.current;
+            if (!node) return;
+            updateObj(obj.id, {
+              x: node.x(),
+              y: node.y(),
+              scaleX: node.scaleX(),
+              scaleY: node.scaleY(),
+              rotation: node.rotation(),
+            });
+          }
+        : undefined,
     };
-  }, [obj?.animation]);
 
-  if (!obj) return null;
-
-  const commonProps: any = {
-    ...obj,
-    id: obj.id,
-    ref: shapeRef,
-    draggable: isInteractionEnabled && obj.draggable !== false,
-    listening: isInteractionEnabled && obj.listening !== false,
-    onClick: isInteractionEnabled
-      ? (e: any) => {
-          e.cancelBubble = true;
-          onSelect(obj.id);
-        }
-      : undefined,
-    onDragEnd: isInteractionEnabled
-      ? (e: any) => onDragEnd(obj.id, e.target.x(), e.target.y())
-      : undefined,
-    onMouseEnter: isInteractionEnabled
-      ? () => {
-          document.body.style.cursor = obj.type === "circle" ? "pointer" : "move";
-        }
-      : undefined,
-    onMouseLeave: isInteractionEnabled
-      ? () => {
-          document.body.style.cursor = "default";
-        }
-      : undefined,
-    onTransformEnd: isInteractionEnabled
-      ? () => {
-          const node = shapeRef.current;
-          if (!node) return;
-          updateObj(obj.id, {
-            x: node.x(),
-            y: node.y(),
-            scaleX: node.scaleX(),
-            scaleY: node.scaleY(),
-            rotation: node.rotation(),
-          });
-        }
-      : undefined,
-  };
-
-  if (obj.type === "rect") return <Rect {...commonProps} />;
-  if (obj.type === "circle") return <Circle {...commonProps} />;
-  if (obj.type === "star") return <Star {...commonProps} />;
-  if (obj.type === "line")
-    return (
-      <Line
-        {...commonProps}
-        points={obj.points || []}
-        stroke={obj.stroke || "#111827"}
-        strokeWidth={obj.strokeWidth || 3}
-        dash={obj.dash || []}
-        tension={obj.tension ?? 0.5}
-        lineCap="round"
-        lineJoin="round"
-        globalCompositeOperation={obj.globalCompositeOperation || "source-over"}
-      />
-    );
-  if (obj.type === "arrow")
-    return (
-      <Arrow
-        {...commonProps}
-        points={[0, 0, 50, 50]}
-        stroke={obj.fill}
-        fill={obj.fill}
-      />
-    );
-  if (obj.type === "text")
-    return (
-      <Text
-        {...commonProps}
-        text={obj.text || "Double click to edit"}
-        fontSize={obj.fontSize || 20}
-        fontFamily={obj.fontFamily || "Calibri"}
-        fontStyle={obj.fontStyle || "normal"}
-        onDblClick={() => {
-          const nextText = window.prompt("Edit text", obj.text || "") ?? obj.text;
-          updateObj(obj.id, { text: nextText });
-        }}
-      />
-    );
-  if (obj.type === "wedge")
-    return (
-      <Wedge
-        {...commonProps}
-        radius={obj.radius || 70}
-        angle={obj.angle || 60}
-        fill={obj.fill || "#ef4444"}
-        stroke={obj.stroke || "black"}
-        strokeWidth={obj.strokeWidth || 2}
-        rotation={obj.rotation || -120}
-      />
-    );
-  if (obj.type === "image") return <CanvasImageShape obj={obj} commonProps={commonProps} />;
-  if (obj.type === "sprite") return <CanvasSpriteShape obj={obj} commonProps={commonProps} />;
-  return null;
-});
+    if (obj.type === "rect") return <Rect {...commonProps} />;
+    if (obj.type === "circle") return <Circle {...commonProps} />;
+    if (obj.type === "star") return <Star {...commonProps} />;
+    if (obj.type === "line")
+      return (
+        <Line
+          {...commonProps}
+          points={obj.points || []}
+          stroke={obj.stroke || "#111827"}
+          strokeWidth={obj.strokeWidth || 3}
+          dash={obj.dash || []}
+          tension={obj.tension ?? 0.5}
+          lineCap="round"
+          lineJoin="round"
+          globalCompositeOperation={
+            obj.globalCompositeOperation || "source-over"
+          }
+        />
+      );
+    if (obj.type === "arrow")
+      return (
+        <Arrow
+          {...commonProps}
+          points={[0, 0, 50, 50]}
+          stroke={obj.fill}
+          fill={obj.fill}
+        />
+      );
+    if (obj.type === "text")
+      return (
+        <Text
+          {...commonProps}
+          text={obj.text || "Double click to edit"}
+          fontSize={obj.fontSize || 20}
+          fontFamily={obj.fontFamily || "Calibri"}
+          fontStyle={obj.fontStyle || "normal"}
+          onDblClick={() => {
+            const nextText =
+              window.prompt("Edit text", obj.text || "") ?? obj.text;
+            updateObj(obj.id, { text: nextText });
+          }}
+        />
+      );
+    if (obj.type === "wedge")
+      return (
+        <Wedge
+          {...commonProps}
+          radius={obj.radius || 70}
+          angle={obj.angle || 60}
+          fill={obj.fill || "#ef4444"}
+          stroke={obj.stroke || "black"}
+          strokeWidth={obj.strokeWidth || 2}
+          rotation={obj.rotation || -120}
+        />
+      );
+    if (obj.type === "image")
+      return <CanvasImageShape obj={obj} commonProps={commonProps} />;
+    if (obj.type === "sprite")
+      return <CanvasSpriteShape obj={obj} commonProps={commonProps} />;
+    return null;
+  },
+);
 
 // --- Canvas Component ---
 function Canvas({
@@ -529,43 +615,161 @@ function Canvas({
   setObjects,
   drawings,
   currentDrawingId,
+  setCurrentDrawingId,
+  createDrawing,
+  renameDrawing,
+  deleteDrawing,
   activeTool,
   drawColor,
   drawSize,
   drawStyle,
   drawTool,
   onManualSave,
+  onShortcutToolSelect,
+  onShortcutDrawToolChange,
+  onShortcutAddShape,
 }: {
   objects: any[];
   setObjects: any;
   drawings: any[];
   currentDrawingId: string | null;
+  setCurrentDrawingId: (id: string | null) => void;
+  createDrawing: (name: string) => string;
+  renameDrawing: (id: string, newName: string) => void;
+  deleteDrawing: (id: string) => void;
   activeTool: ToolMode;
   drawColor: string;
   drawSize: number;
   drawStyle: BrushStyle;
   drawTool: DrawTool;
   onManualSave: () => void;
+  onShortcutToolSelect: (tool: ToolMode) => void;
+  onShortcutDrawToolChange: (tool: DrawTool) => void;
+  onShortcutAddShape: (type: string) => void;
 }) {
   const [scale, setScale] = useState(1);
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [groupDraftIds, setGroupDraftIds] = useState<string[]>([]);
   const [isPanning, setIsPanning] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
-  const [clipboard, setClipboard] = useState<any>(null);
+  const [clipboard, setClipboard] = useState<any[] | null>(null);
   const [redoStack, setRedoStack] = useState<any[]>([]); // For RedoF
   const trRef = useRef<Konva.Transformer>(null);
   const currentStage = useRef<Konva.Stage>(null);
   const isDrawingRef = useRef(false);
-  const drawingLineIdRef = useRef<string | null>(null);
   const mediaFileRef = useRef<HTMLInputElement>(null);
+  const addImageFileRef = useRef<HTMLInputElement>(null);
   const mediaTargetIdRef = useRef<string | null>(null);
   const router = useRouter();
   const { CanvasBoard, setCanvasBoard } = useCanvasState() as any;
-  const [canvasBackground, setCanvasBackground] = useState("#f8fafc");
+  const [canvasBackground, setCanvasBackground] = useState("#000");
+  const drawingCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingContextRef = useRef<CanvasRenderingContext2D | null>(null);
+  const drawingImageRef = useRef<any>(null);
+  const lastPosition = useRef<{ x: number; y: number } | null>(null);
+  const drawingOriginRef = useRef({ x: 0, y: 0 });
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [panelTab, setPanelTab] = useState("layers");
+  const [isWorkspacePanelCollapsed, setIsWorkspacePanelCollapsed] = useState(false);
+  const [layerRenameId, setLayerRenameId] = useState<string | null>(null);
+  const [layerRenameValue, setLayerRenameValue] = useState("");
+  const [pageRenameId, setPageRenameId] = useState<string | null>(null);
+  const [pageRenameValue, setPageRenameValue] = useState("");
+  const selectedId = selectedIds[0] ?? null;
+
+  const setSelectedId = (id: string | null) => {
+    setSelectedIds(id ? [id] : []);
+  };
+
+  const handleSelectObject = (id: string, additive = false) => {
+    if (!additive) {
+      setSelectedIds([id]);
+      return;
+    }
+
+    setSelectedIds((prev) =>
+      prev.includes(id)
+        ? prev.filter((selected) => selected !== id)
+        : [...prev, id],
+    );
+  };
+
+  const getSelectionTargetIds = (source: any[]) => {
+    if (selectedIds.length > 1) return selectedIds;
+
+    const primary = source.find((o) => o.id === selectedIds[0]);
+    if (primary?.groupId) {
+      return source.filter((o) => o.groupId === primary.groupId).map((o) => o.id);
+    }
+
+    return selectedIds;
+  };
+
+  const groupSelection = () => {
+    if (selectedIds.length < 2) return;
+    const groupId = `group-${uuidv4()}`;
+    setObjects((prev: any[]) =>
+      prev.map((o) => (selectedIds.includes(o.id) ? { ...o, groupId } : o)),
+    );
+  };
+
+  const ungroupSelection = () => {
+    const groups = new Set(
+      objects
+        .filter((obj) => selectedIds.includes(obj.id) && obj.groupId)
+        .map((obj) => obj.groupId),
+    );
+    if (groups.size === 0) return;
+
+    setObjects((prev: any[]) =>
+      prev.map((obj) =>
+        groups.has(obj.groupId) ? { ...obj, groupId: undefined } : obj,
+      ),
+    );
+  };
+
+  const toggleLayerVisibility = (id: string) => {
+    const target = objects.find((obj) => obj.id === id);
+    if (!target) return;
+    updateObj(id, { visible: target.visible === false ? true : false });
+  };
+
+  const toggleLayerLock = (id: string) => {
+    const target = objects.find((obj) => obj.id === id);
+    if (!target) return;
+    const locked = target.draggable === false;
+    updateObj(id, {
+      draggable: locked ? true : false,
+      listening: locked ? true : false,
+    });
+  };
+
+  const commitLayerRename = () => {
+    if (!layerRenameId) return;
+    const name = layerRenameValue.trim();
+    if (!name) return;
+    updateObj(layerRenameId, { name });
+    setLayerRenameId(null);
+    setLayerRenameValue("");
+  };
+
+  const commitPageRename = () => {
+    if (!pageRenameId) return;
+    const name = pageRenameValue.trim();
+    if (!name) return;
+    renameDrawing(pageRenameId, name);
+    setPageRenameId(null);
+    setPageRenameValue("");
+  };
+
+  useEffect(() => {
+    if (currentDrawingId) {
+      router.push(`?canvas=${currentDrawingId}`);
+    }
+  }, [currentDrawingId]);
 
   useEffect(() => {
     const updateSize = () =>
@@ -576,16 +780,17 @@ function Canvas({
   }, []);
 
   useEffect(() => {
-    if (trRef.current && selectedId) {
-      const node = currentStage.current?.findOne("#" + selectedId);
-      if (node) {
-        trRef.current.nodes([node]);
-        trRef.current.getLayer()?.batchDraw();
-      }
+    if (trRef.current && selectedIds.length > 0) {
+      const nodes = selectedIds
+        .map((id) => currentStage.current?.findOne("#" + id))
+        .filter(Boolean) as Konva.Node[];
+
+      trRef.current.nodes(nodes);
+      trRef.current.getLayer()?.batchDraw();
     } else {
       trRef.current?.nodes([]);
     }
-  }, [selectedId, objects]);
+  }, [selectedIds, objects]);
 
   useEffect(() => {
     setCanvasBoard((prev: any) => {
@@ -641,7 +846,7 @@ function Canvas({
 
   useEffect(() => {
     if (activeTool === "draw") {
-      setSelectedId(null);
+      setSelectedIds([]);
       trRef.current?.nodes([]);
     }
   }, [activeTool]);
@@ -652,10 +857,108 @@ function Canvas({
     stage.container().style.backgroundColor = canvasBackground;
   }, [canvasBackground]);
 
+  useEffect(() => {
+    if (drawingCanvasRef.current || typeof document === "undefined") return;
+
+    const nextCanvas = document.createElement("canvas");
+    nextCanvas.width = Math.max(4096, Math.ceil(window.innerWidth * 2));
+    nextCanvas.height = Math.max(4096, Math.ceil(window.innerHeight * 2));
+    drawingOriginRef.current = {
+      x: Math.floor(nextCanvas.width / 2),
+      y: Math.floor(nextCanvas.height / 2),
+    };
+
+    const context = nextCanvas.getContext("2d");
+    if (context) {
+      context.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+      context.lineJoin = "round";
+      context.lineCap = "round";
+    }
+
+    drawingCanvasRef.current = nextCanvas;
+    drawingContextRef.current = context;
+    setCanvas(nextCanvas);
+  }, []);
+
+  useEffect(() => {
+    const drawingCanvas = drawingCanvasRef.current;
+    const context = drawingContextRef.current;
+    if (!drawingCanvas || !context) return;
+
+    context.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+    drawingImageRef.current?.getLayer?.()?.batchDraw();
+    isDrawingRef.current = false;
+    lastPosition.current = null;
+  }, [currentDrawingId]);
+
+  const getWorldPointer = (stage: Konva.Stage) => {
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return null;
+
+    return {
+      x: (pointer.x - stagePos.x) / scale,
+      y: (pointer.y - stagePos.y) / scale,
+    };
+  };
+
+  const paintSegment = (
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+  ) => {
+    const context = drawingContextRef.current;
+    const imageNode = drawingImageRef.current;
+    if (!context || !imageNode) return;
+
+    const origin = drawingOriginRef.current;
+    const fromCanvas = { x: from.x + origin.x, y: from.y + origin.y };
+    const toCanvas = { x: to.x + origin.x, y: to.y + origin.y };
+
+    context.save();
+    context.globalCompositeOperation =
+      drawTool === "eraser" ? "destination-out" : "source-over";
+    context.strokeStyle = drawTool === "eraser" ? "rgba(0,0,0,1)" : drawColor;
+    context.lineWidth = drawSize;
+    context.setLineDash(brushStyleToDash(drawStyle));
+    context.beginPath();
+    context.moveTo(fromCanvas.x, fromCanvas.y);
+    context.lineTo(toCanvas.x, toCanvas.y);
+    context.stroke();
+    context.closePath();
+    context.restore();
+
+    imageNode.getLayer()?.batchDraw();
+  };
+
+  const startDrawing = (stage: Konva.Stage) => {
+    const pointer = getWorldPointer(stage);
+    if (!pointer) return;
+
+    isDrawingRef.current = true;
+    lastPosition.current = pointer;
+    paintSegment(pointer, pointer);
+  };
+
+  const continueDrawing = (stage: Konva.Stage) => {
+    const pointer = getWorldPointer(stage);
+    if (!pointer) return;
+
+    setCursorPos(pointer);
+
+    if (!isDrawingRef.current || !lastPosition.current) return;
+
+    paintSegment(lastPosition.current, pointer);
+    lastPosition.current = pointer;
+  };
+
+  const stopDrawing = () => {
+    isDrawingRef.current = false;
+    lastPosition.current = null;
+  };
+
   const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
     if (activeTool === "draw") return;
 
-    if (e.target === e.target.getStage()) setSelectedId(null);
+    if (e.target === e.target.getStage()) setSelectedIds([]);
 
     if (CanvasBoard?.pendingShape) {
       const type = CanvasBoard.pendingShape;
@@ -684,77 +987,13 @@ function Canvas({
     }
   };
 
-  const startDrawing = () => {
-    const stage = currentStage.current;
-    if (!stage) return;
-
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
-
-    const x = (pointer.x - stagePos.x) / scale;
-    const y = (pointer.y - stagePos.y) / scale;
-    const lineId = `line-${uuidv4()}`;
-
-    setObjects((prev: any[]) => [
-      ...prev,
-      {
-        id: lineId,
-        type: "line",
-        points: [x, y],
-        stroke: drawTool === "eraser" ? "#000000" : drawColor,
-        strokeWidth: drawSize,
-        dash: brushStyleToDash(drawStyle),
-        tension: 0.5,
-        drawTool,
-        globalCompositeOperation:
-          drawTool === "eraser" ? "destination-out" : "source-over",
-        draggable: true,
-        listening: true,
-      },
-    ]);
-
-    drawingLineIdRef.current = lineId;
-    isDrawingRef.current = true;
-  };
-
-  const appendDrawingPoint = () => {
-    const stage = currentStage.current;
-    if (!stage || !isDrawingRef.current || !drawingLineIdRef.current) return;
-
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
-
-    const x = (pointer.x - stagePos.x) / scale;
-    const y = (pointer.y - stagePos.y) / scale;
-
-    setCursorPos({ x, y });
-
-    setObjects((prev: any[]) => {
-      if (prev.length === 0) return prev;
-      const next = [...prev];
-      const lastIndex = next.length - 1;
-      const lastLine = next[lastIndex];
-
-      if (!lastLine || lastLine.id !== drawingLineIdRef.current) {
-        return prev;
-      }
-
-      const updatedLine = {
-        ...lastLine,
-        points: [...(lastLine.points || []), x, y],
-      };
-      next.splice(lastIndex, 1, updatedLine);
-      return next;
-    });
-  };
-
-  const finishDrawing = () => {
-    isDrawingRef.current = false;
-    drawingLineIdRef.current = null;
-  };
-
   const selectedObject = objects.find((o) => o.id === selectedId);
-  const isSelectedMedia = selectedObject?.type === "image" || selectedObject?.type === "sprite";
+  const isSelectedMedia =
+    selectedObject?.type === "image" || selectedObject?.type === "sprite";
+  const layersTopFirst = [...objects]
+    .map((obj, index) => ({ obj, index }))
+    .reverse();
+  const currentDrawing = drawings.find((d) => d.id === currentDrawingId) || null;
 
   const openMediaPicker = () => {
     if (!selectedObject || !isSelectedMedia) return;
@@ -762,7 +1001,9 @@ function Canvas({
     mediaFileRef.current?.click();
   };
 
-  const handleMediaFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0];
     const targetId = mediaTargetIdRef.current;
     if (!file || !targetId) return;
@@ -886,13 +1127,17 @@ function Canvas({
 
   const rotateSelectedMedia = (delta: number) => {
     if (!selectedObject || !isSelectedMedia) return;
-    updateObj(selectedObject.id, { rotation: (selectedObject.rotation || 0) + delta });
+    updateObj(selectedObject.id, {
+      rotation: (selectedObject.rotation || 0) + delta,
+    });
   };
 
   const flipSelectedMedia = (axis: "x" | "y") => {
     if (!selectedObject || !isSelectedMedia) return;
     if (axis === "x") {
-      updateObj(selectedObject.id, { scaleX: (selectedObject.scaleX || 1) * -1 });
+      updateObj(selectedObject.id, {
+        scaleX: (selectedObject.scaleX || 1) * -1,
+      });
       return;
     }
     updateObj(selectedObject.id, { scaleY: (selectedObject.scaleY || 1) * -1 });
@@ -1000,7 +1245,9 @@ function Canvas({
         animation: "idle",
         frameRate: 7,
         animations: {
-          idle: [2, 2, 70, 119, 71, 2, 74, 119, 146, 2, 81, 119, 226, 2, 76, 119],
+          idle: [
+            2, 2, 70, 119, 71, 2, 74, 119, 146, 2, 81, 119, 226, 2, 76, 119,
+          ],
           punch: [2, 138, 74, 122, 76, 138, 84, 122, 346, 138, 120, 122],
         },
         draggable: true,
@@ -1008,7 +1255,10 @@ function Canvas({
     ]);
   };
 
-  const addImageFromDataUrl = (dataUrl: string, pointer?: { x: number; y: number }) => {
+  const addImageFromDataUrl = (
+    dataUrl: string,
+    pointer?: { x: number; y: number },
+  ) => {
     const image = new window.Image();
     image.onload = () => {
       const canvasWidth = size.width || window.innerWidth;
@@ -1019,8 +1269,12 @@ function Canvas({
         1,
       );
 
-      const x = pointer ? (pointer.x - stagePos.x) / scale : cursorPos.x || canvasWidth / 2;
-      const y = pointer ? (pointer.y - stagePos.y) / scale : cursorPos.y || canvasHeight / 2;
+      const x = pointer
+        ? (pointer.x - stagePos.x) / scale
+        : cursorPos.x || canvasWidth / 2;
+      const y = pointer
+        ? (pointer.y - stagePos.y) / scale
+        : cursorPos.y || canvasHeight / 2;
 
       setObjects((prev: any[]) => [
         ...prev,
@@ -1037,6 +1291,26 @@ function Canvas({
       ]);
     };
     image.src = dataUrl;
+  };
+
+  const openImageUploadPicker = () => {
+    addImageFileRef.current?.click();
+  };
+
+  const handleAddImageFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = String(ev.target?.result || "");
+      if (!dataUrl) return;
+      addImageFromDataUrl(dataUrl);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
   };
 
   const handleCanvasDrop = (event: React.DragEvent<HTMLDivElement>) => {
@@ -1063,7 +1337,9 @@ function Canvas({
       return;
     }
 
-    const uri = event.dataTransfer.getData("text/uri-list") || event.dataTransfer.getData("text/plain");
+    const uri =
+      event.dataTransfer.getData("text/uri-list") ||
+      event.dataTransfer.getData("text/plain");
     if (!uri) return;
 
     const maybeUrl = uri.trim();
@@ -1098,13 +1374,16 @@ function Canvas({
   };
 
   const markForGrouping = () => {
-    if (!selectedId) return;
-    setGroupDraftIds((prev) => (prev.includes(selectedId) ? prev : [...prev, selectedId]));
+    if (selectedIds.length === 0) return;
+    setGroupDraftIds((prev) => {
+      const merged = new Set([...prev, ...selectedIds]);
+      return Array.from(merged);
+    });
   };
 
   const unmarkForGrouping = () => {
-    if (!selectedId) return;
-    setGroupDraftIds((prev) => prev.filter((id) => id !== selectedId));
+    if (selectedIds.length === 0) return;
+    setGroupDraftIds((prev) => prev.filter((id) => !selectedIds.includes(id)));
   };
 
   const groupMarkedShapes = () => {
@@ -1120,26 +1399,84 @@ function Canvas({
     if (!selectedObject?.groupId) return;
     const selectedGroup = selectedObject.groupId;
     setObjects((prev: any[]) =>
-      prev.map((o) => (o.groupId === selectedGroup ? { ...o, groupId: undefined } : o)),
+      prev.map((o) =>
+        o.groupId === selectedGroup ? { ...o, groupId: undefined } : o,
+      ),
     );
   };
 
-  const moveSelectionLayer = (direction: "front" | "back") => {
-    if (!selectedId) return;
+  const moveSelectionLayer = (
+    direction: "front" | "back" | "forward" | "backward",
+  ) => {
+    if (selectedIds.length === 0) return;
 
     setObjects((prev: any[]) => {
-      const selected = prev.find((o) => o.id === selectedId);
-      if (!selected) return prev;
-
-      const targetIds = selected.groupId
-        ? prev.filter((o) => o.groupId === selected.groupId).map((o) => o.id)
-        : [selectedId];
+      const targetIds = getSelectionTargetIds(prev);
+      if (targetIds.length === 0) return prev;
 
       const moving = prev.filter((o) => targetIds.includes(o.id));
       const rest = prev.filter((o) => !targetIds.includes(o.id));
 
-      return direction === "front" ? [...rest, ...moving] : [...moving, ...rest];
+      if (direction === "forward" || direction === "backward") {
+        const next = [...prev];
+        if (direction === "forward") {
+          for (let i = next.length - 2; i >= 0; i -= 1) {
+            if (
+              targetIds.includes(next[i].id) &&
+              !targetIds.includes(next[i + 1].id)
+            ) {
+              [next[i], next[i + 1]] = [next[i + 1], next[i]];
+            }
+          }
+        } else {
+          for (let i = 1; i < next.length; i += 1) {
+            if (
+              targetIds.includes(next[i].id) &&
+              !targetIds.includes(next[i - 1].id)
+            ) {
+              [next[i], next[i - 1]] = [next[i - 1], next[i]];
+            }
+          }
+        }
+        return next;
+      }
+
+      return direction === "front"
+        ? [...rest, ...moving]
+        : [...moving, ...rest];
     });
+  };
+
+  const duplicateSelection = () => {
+    if (selectedIds.length === 0) return;
+    const targets = objects.filter((obj: any) => selectedIds.includes(obj.id));
+    const duplicated = targets.map((target) => ({
+      ...target,
+      id: `${target.type}-${uuidv4()}`,
+      x: (target.x || 0) + 20,
+      y: (target.y || 0) + 20,
+    }));
+    setObjects((prev: typeof objects) => [...prev, ...duplicated]);
+    setSelectedIds(duplicated.map((obj) => obj.id));
+  };
+
+  const deleteSelection = () => {
+    if (selectedIds.length === 0) return;
+    setObjects((prev: any[]) => prev.filter((o) => !selectedIds.includes(o.id)));
+    setSelectedIds([]);
+  };
+
+  const copySelectionToClipboard = () => {
+    if (selectedIds.length === 0) return;
+    const targets = objects.filter((o) => selectedIds.includes(o.id));
+    setClipboard(targets.map((obj) => ({ ...obj })));
+  };
+
+  const applyFillToSelection = (fill: string) => {
+    if (selectedIds.length === 0) return;
+    setObjects((prev: any[]) =>
+      prev.map((obj) => (selectedIds.includes(obj.id) ? { ...obj, fill } : obj)),
+    );
   };
 
   useEffect(() => {
@@ -1191,6 +1528,7 @@ function Canvas({
         return;
 
       const isCtrl = e.ctrlKey || e.metaKey;
+      const isShift = e.shiftKey;
       const key = e.key.toLowerCase();
 
       // Helper to save history before an action
@@ -1199,23 +1537,109 @@ function Canvas({
         setRedoStack([]); // Clear redo on new action
       };
 
+      // Tool shortcuts (no modifiers)
+      if (!isCtrl) {
+        if (key === "v") {
+          e.preventDefault();
+          onShortcutToolSelect("select");
+          return;
+        }
+        if (key === "b") {
+          e.preventDefault();
+          onShortcutDrawToolChange("brush");
+          return;
+        }
+        if (key === "e") {
+          e.preventDefault();
+          onShortcutDrawToolChange("eraser");
+          return;
+        }
+        if (key === "r") {
+          e.preventDefault();
+          onShortcutAddShape("rect");
+          return;
+        }
+        if (key === "o") {
+          e.preventDefault();
+          onShortcutAddShape("circle");
+          return;
+        }
+        if (key === "a") {
+          e.preventDefault();
+          onShortcutAddShape("arrow");
+          return;
+        }
+        if (key === "q") {
+          e.preventDefault();
+          onShortcutAddShape("star");
+          return;
+        }
+        if (key === "escape") {
+          e.preventDefault();
+          setSelectedIds([]);
+          setGroupDraftIds([]);
+          return;
+        }
+      }
+
       switch (key) {
         // --- DELETE ---
         case "backspace":
         case "delete":
-          if (selectedId) {
+          if (selectedIds.length > 0) {
             saveHistory();
-            setObjects((prev: typeof objects) => prev.filter((obj: any) => obj.id !== selectedId));
-            setSelectedId(null);
+            setObjects((prev: typeof objects) =>
+              prev.filter((obj: any) => !selectedIds.includes(obj.id)),
+            );
+            setSelectedIds([]);
+          }
+          break;
+
+        // --- SELECT ALL (Ctrl + A) ---
+        case "a":
+          if (isCtrl) {
+            e.preventDefault();
+            setSelectedIds(objects.map((obj) => obj.id));
+          }
+          break;
+
+        // --- GROUP / UNGROUP ---
+        case "g":
+          if (!isCtrl) break;
+          e.preventDefault();
+          if (isShift) {
+            const groups = new Set(
+              objects
+                .filter((obj) => selectedIds.includes(obj.id) && obj.groupId)
+                .map((obj) => obj.groupId),
+            );
+            if (groups.size > 0) {
+              saveHistory();
+              setObjects((prev: any[]) =>
+                prev.map((obj) =>
+                  groups.has(obj.groupId)
+                    ? { ...obj, groupId: undefined }
+                    : obj,
+                ),
+              );
+            }
+          } else if (selectedIds.length >= 2) {
+            saveHistory();
+            const groupId = `group-${uuidv4()}`;
+            setObjects((prev: any[]) =>
+              prev.map((obj) =>
+                selectedIds.includes(obj.id) ? { ...obj, groupId } : obj,
+              ),
+            );
           }
           break;
 
         // --- COPY (Ctrl + C) ---
         case "c":
-          if (isCtrl && selectedId) {
+          if (isCtrl && selectedIds.length > 0) {
             e.preventDefault();
-            const target = objects.find((o) => o.id === selectedId);
-            setClipboard({ ...target });
+            const targets = objects.filter((o) => selectedIds.includes(o.id));
+            setClipboard(targets.map((obj) => ({ ...obj })));
           }
           break;
 
@@ -1246,15 +1670,14 @@ function Canvas({
           if (isCtrl && clipboard) {
             e.preventDefault();
             saveHistory();
-            const newId = `${clipboard.type}-${uuidv4()}`;
-            const newObj = {
-              ...clipboard,
-              id: newId,
-              x: clipboard.x + 20,
-              y: clipboard.y + 20,
-            };
-            setObjects((prev: typeof objects) => [...prev, newObj]);
-            setSelectedId(newId);
+            const pasted = clipboard.map((item) => ({
+              ...item,
+              id: `${item.type}-${uuidv4()}`,
+              x: (item.x || 0) + 20,
+              y: (item.y || 0) + 20,
+            }));
+            setObjects((prev: typeof objects) => [...prev, ...pasted]);
+            setSelectedIds(pasted.map((obj) => obj.id));
           }
           break;
 
@@ -1283,24 +1706,27 @@ function Canvas({
 
         // --- DUPLICATE (Ctrl + D) ---
         case "d":
-          if (isCtrl && selectedId) {
+          if (isCtrl && selectedIds.length > 0) {
             e.preventDefault();
             saveHistory();
-            const target = objects.find((o: any) => o.id === selectedId);
-            if (target) {
-              const newId = `${target.type}-${uuidv4()}`;
-              setObjects((prev: typeof objects) => [
-                ...prev,
-                { ...target, id: newId, x: target.x + 20, y: target.y + 20 },
-              ]);
-              setSelectedId(newId);
-            }
+            const targets = objects.filter((obj: any) => selectedIds.includes(obj.id));
+            const duplicated = targets.map((target) => ({
+              ...target,
+              id: `${target.type}-${uuidv4()}`,
+              x: (target.x || 0) + 20,
+              y: (target.y || 0) + 20,
+            }));
+            setObjects((prev: typeof objects) => [...prev, ...duplicated]);
+            setSelectedIds(duplicated.map((obj) => obj.id));
           }
           break;
 
         // --- UTILS ---
         case "l": // Lock
-          setCanvasBoard((prev: any) => ({ ...prev, scaleLock: !prev.scaleLock }));
+          setCanvasBoard((prev: any) => ({
+            ...prev,
+            scaleLock: !prev.scaleLock,
+          }));
           break;
 
         case "0": // Reset Zoom
@@ -1314,42 +1740,46 @@ function Canvas({
         // --- movements ---
         case "arrowleft":
           e.preventDefault();
-          if (isCtrl) {
-            // implement speeded movement left
-          }
-          if (selectedId) {
-            const target = objects.find((o) => o.id === selectedId);
-            target.x = target.x - 2;
+          if (selectedIds.length > 0) {
+            const step = isCtrl ? 10 : 2;
+            setObjects((prev: any[]) =>
+              prev.map((obj) =>
+                selectedIds.includes(obj.id) ? { ...obj, x: (obj.x || 0) - step } : obj,
+              ),
+            );
           }
           break;
         case "arrowright":
           e.preventDefault();
-          if (isCtrl) {
-            // implement speeded movement left
-          }
-          if (selectedId) {
-            const target = objects.find((o) => o.id === selectedId);
-            target.x = target.x + 2;
-          }
-          break;
-        case "arrowup": 
-          e.preventDefault();
-          if (isCtrl) {
-            // implement speeded movement left
-          }
-          if (selectedId) {
-            const target = objects.find((o) => o.id === selectedId);
-            target.y = target.y - 2;
+          if (selectedIds.length > 0) {
+            const step = isCtrl ? 10 : 2;
+            setObjects((prev: any[]) =>
+              prev.map((obj) =>
+                selectedIds.includes(obj.id) ? { ...obj, x: (obj.x || 0) + step } : obj,
+              ),
+            );
           }
           break;
-          case "arrowdown": 
+        case "arrowup":
           e.preventDefault();
-          if (isCtrl) {
-            // implement speeded movement left
+          if (selectedIds.length > 0) {
+            const step = isCtrl ? 10 : 2;
+            setObjects((prev: any[]) =>
+              prev.map((obj) =>
+                selectedIds.includes(obj.id) ? { ...obj, y: (obj.y || 0) - step } : obj,
+              ),
+            );
           }
-          if (selectedId) {
-            const target = objects.find((o) => o.id === selectedId);
-            target.y = target.y + 2;
+          break;
+        case "arrowdown":
+          e.preventDefault();
+          if (selectedIds.length > 0) {
+            const step = isCtrl ? 10 : 2;
+            setObjects((prev: any[]) =>
+              prev.map((obj) =>
+                selectedIds.includes(obj.id) ? { ...obj, y: (obj.y || 0) + step } : obj,
+              ),
+            );
           }
           break;
       }
@@ -1357,7 +1787,18 @@ function Canvas({
 
     window.addEventListener("keydown", handleShortcuts);
     return () => window.removeEventListener("keydown", handleShortcuts);
-  }, [selectedId, objects, clipboard, history, redoStack, onManualSave]);
+  }, [
+    selectedIds,
+    objects,
+    clipboard,
+    history,
+    redoStack,
+    onManualSave,
+    onShortcutAddShape,
+    onShortcutDrawToolChange,
+    onShortcutToolSelect,
+    setCanvasBoard,
+  ]);
 
   return (
     <ContextMenu>
@@ -1375,36 +1816,39 @@ function Canvas({
           x={stagePos.x}
           y={stagePos.y}
           draggable={activeTool === "draw" ? false : !CanvasBoard?.scaleLock}
-          style={{ cursor: activeTool === "draw" ? "crosshair" : "default" }}
+          style={{
+            cursor: activeTool === "draw" ? "crosshair" : "default",
+            touchAction: "none",
+          }}
           onMouseDown={(e) => {
             if (activeTool === "draw") {
-              if (e.evt.button !== 0) return;
               e.evt.preventDefault();
-              startDrawing();
+              const stage = e.target.getStage();
+              if (stage) startDrawing(stage);
               return;
             }
-
-            if (e.evt.button === 1) setIsPanning(true);
-          }}
-          onTouchStart={() => {
-            if (activeTool !== "draw") return;
-            startDrawing();
           }}
           onMouseUp={() => {
-            setIsPanning(false);
-            if (activeTool === "draw") {
-              finishDrawing();
-            }
-          }}
-          onTouchEnd={() => {
-            if (activeTool === "draw") {
-              finishDrawing();
-            }
+            if (activeTool === "draw") stopDrawing();
           }}
           onMouseLeave={() => {
+            if (activeTool === "draw") stopDrawing();
+          }}
+          onTouchStart={(e) => {
             if (activeTool === "draw") {
-              finishDrawing();
+              e.evt.preventDefault();
+              const stage = e.target.getStage();
+              if (stage) startDrawing(stage);
             }
+          }}
+          onTouchMove={(e) => {
+            if (activeTool !== "draw") return;
+            e.evt.preventDefault();
+            const stage = e.target.getStage();
+            if (stage) continueDrawing(stage);
+          }}
+          onTouchEnd={() => {
+            if (activeTool === "draw") stopDrawing();
           }}
           onWheel={(e) => {
             if (CanvasBoard?.scaleLock) return;
@@ -1425,35 +1869,21 @@ function Canvas({
           }}
           onClick={handleStageClick}
           onMouseMove={(e) => {
+            const stage = e.target.getStage();
+            if (!stage) return;
+
             if (activeTool === "draw") {
-              const leftButtonDown = (e.evt.buttons & 1) === 1;
-
-              if (leftButtonDown && !isDrawingRef.current) {
-                startDrawing();
-              }
-
-              if (!leftButtonDown && isDrawingRef.current) {
-                finishDrawing();
-                return;
-              }
-
-              appendDrawingPoint();
+              continueDrawing(stage);
               return;
             }
 
-            const stage = e.target.getStage();
-            const pointer = stage?.getPointerPosition();
+            const pointer = stage.getPointerPosition();
             if (!pointer) return;
 
-            const x = (pointer.x - stagePos.x) / scale;
-            const y = (pointer.y - stagePos.y) / scale;
-
-            setCursorPos({ x, y });
-          }}
-          onTouchMove={() => {
-            if (activeTool === "draw") {
-              appendDrawingPoint();
-            }
+            setCursorPos({
+              x: (pointer.x - stagePos.x) / scale,
+              y: (pointer.y - stagePos.y) / scale,
+            });
           }}
         >
           <Layer>
@@ -1465,11 +1895,12 @@ function Canvas({
               fill={canvasBackground}
               listening={false}
             />
+
             {objects.map((obj) => (
               <ShapeRenderer
                 key={obj.id}
                 id={obj.id}
-                onSelect={setSelectedId}
+                onSelect={handleSelectObject}
                 isInteractionEnabled={activeTool !== "draw"}
                 updateObj={updateObj}
                 onDragEnd={(id: string, x: number, y: number) =>
@@ -1477,15 +1908,14 @@ function Canvas({
                 }
               />
             ))}
-            {activeTool !== "draw" && (
-              <Transformer
-                ref={trRef}
-                borderStroke="#3b82f6"
-                anchorFill="#fff"
-                anchorStroke="#3b82f6"
-                anchorSize={8}
-              />
-            )}
+
+            <Transformer
+              ref={trRef}
+              borderStroke="#3b82f6"
+              anchorFill="#fff"
+              anchorStroke="#3b82f6"
+              anchorSize={8}
+            />
 
             {CanvasBoard?.pendingShape && activeTool !== "draw" && (
               <Rect
@@ -1501,17 +1931,309 @@ function Canvas({
               />
             )}
           </Layer>
+
+          <Layer listening={false}>
+            <Image
+              ref={drawingImageRef}
+              image={canvas ?? undefined}
+              x={-drawingOriginRef.current.x}
+              y={-drawingOriginRef.current.y}
+            />
+          </Layer>
         </Stage>
       </ContextMenuTrigger>
 
-      <ContextMenuContent className="w-56">
+      <Card className={`absolute right-4 top-16 z-40 border-zinc-800 bg-zinc-950/90 text-zinc-100 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl transition-all duration-200 ${isWorkspacePanelCollapsed ? "w-14" : "w-[20rem]"}`}>
+        <CardHeader className="space-y-1 pb-2">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <Layers2 className="h-4 w-4" />
+                {!isWorkspacePanelCollapsed && "Workspace"}
+              </CardTitle>
+              {!isWorkspacePanelCollapsed && (
+                <CardDescription className="text-xs text-zinc-400">
+                  Manage pages, layers, grouping, and order.
+                </CardDescription>
+              )}
+            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7 rounded-full border border-zinc-800 bg-zinc-900/80"
+              onClick={() => setIsWorkspacePanelCollapsed((prev) => !prev)}
+              aria-label={isWorkspacePanelCollapsed ? "Expand workspace panel" : "Collapse workspace panel"}
+            >
+              <PanelLeftIcon className={`h-3.5 w-3.5 transition-transform ${isWorkspacePanelCollapsed ? "rotate-180" : ""}`} />
+            </Button>
+          </div>
+        </CardHeader>
+        {!isWorkspacePanelCollapsed && <CardContent className="pt-0">
+          <Tabs value={panelTab} onValueChange={setPanelTab}>
+            <TabsList className="grid h-8 w-full grid-cols-2 rounded-lg border border-zinc-800 bg-zinc-900/70">
+              <TabsTrigger value="pages" className="text-xs">
+                <FolderKanban className="mr-1.5 h-3.5 w-3.5" /> Pages
+              </TabsTrigger>
+              <TabsTrigger value="layers" className="text-xs">
+                <Layers className="mr-1.5 h-3.5 w-3.5" /> Layers
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="pages" className="mt-3 space-y-2">
+              <Button
+                size="sm"
+                className="h-8 w-full justify-start text-xs"
+                onClick={() => {
+                  const nextIndex = drawings.length + 1;
+                  const createdId = createDrawing(`Page ${nextIndex}`);
+                  setCurrentDrawingId(createdId);
+                }}
+              >
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> New Page
+              </Button>
+
+              <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+                {drawings.map((drawing) => {
+                  const isActive = drawing.id === currentDrawingId;
+                  const isEditing = pageRenameId === drawing.id;
+
+                  return (
+                    <div
+                      key={drawing.id}
+                      className={`rounded-lg border px-2 py-1.5 ${isActive ? "border-cyan-400/50 bg-cyan-500/10" : "border-zinc-800 bg-zinc-900/60"}`}
+                    >
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={pageRenameValue}
+                            onChange={(e) => setPageRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitPageRename();
+                              if (e.key === "Escape") {
+                                setPageRenameId(null);
+                                setPageRenameValue("");
+                              }
+                            }}
+                            className="h-7 border-zinc-700 bg-zinc-950 text-xs"
+                            autoFocus
+                          />
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={commitPageRename}>
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              setPageRenameId(null);
+                              setPageRenameValue("");
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 truncate text-left text-xs font-medium"
+                            onClick={() => setCurrentDrawingId(drawing.id)}
+                          >
+                            {drawing.name}
+                          </button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              setPageRenameId(drawing.id);
+                              setPageRenameValue(drawing.name || "");
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-red-300 hover:text-red-200"
+                            disabled={drawings.length <= 1}
+                            onClick={() => deleteDrawing(drawing.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="layers" className="mt-3 space-y-2">
+              <div className="grid grid-cols-2 gap-1">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 text-xs"
+                  onClick={() => moveSelectionLayer("forward")}
+                  disabled={selectedIds.length === 0}
+                >
+                  <ChevronUp className="mr-1.5 h-3.5 w-3.5" /> Forward
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 text-xs"
+                  onClick={() => moveSelectionLayer("backward")}
+                  disabled={selectedIds.length === 0}
+                >
+                  <ChevronDown className="mr-1.5 h-3.5 w-3.5" /> Backward
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 text-xs"
+                  onClick={groupSelection}
+                  disabled={selectedIds.length < 2}
+                >
+                  <Group className="mr-1.5 h-3.5 w-3.5" /> Group
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 text-xs"
+                  onClick={ungroupSelection}
+                  disabled={selectedIds.length === 0}
+                >
+                  <Ungroup className="mr-1.5 h-3.5 w-3.5" /> Ungroup
+                </Button>
+              </div>
+
+              <Separator className="bg-zinc-800" />
+
+              <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+                {layersTopFirst.length === 0 && (
+                  <div className="rounded-md border border-dashed border-zinc-800 px-2 py-3 text-center text-xs text-zinc-500">
+                    No layers yet in {currentDrawing?.name || "this page"}.
+                  </div>
+                )}
+
+                {layersTopFirst.map(({ obj, index }) => {
+                  const isSelected = selectedIds.includes(obj.id);
+                  const isEditing = layerRenameId === obj.id;
+                  const defaultName = `${obj.type?.[0]?.toUpperCase() || "L"}${obj.type?.slice(1) || "ayer"} ${objects.length - index}`;
+                  const layerName = obj.name || defaultName;
+
+                  return (
+                    <div
+                      key={obj.id}
+                      className={`rounded-lg border px-2 py-1.5 ${isSelected ? "border-cyan-400/50 bg-cyan-500/10" : "border-zinc-800 bg-zinc-900/60"}`}
+                    >
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={layerRenameValue}
+                            onChange={(e) => setLayerRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitLayerRename();
+                              if (e.key === "Escape") {
+                                setLayerRenameId(null);
+                                setLayerRenameValue("");
+                              }
+                            }}
+                            className="h-7 border-zinc-700 bg-zinc-950 text-xs"
+                            autoFocus
+                          />
+                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={commitLayerRename}>
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              setLayerRenameId(null);
+                              setLayerRenameValue("");
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 truncate text-left text-xs"
+                            onClick={(e) =>
+                              handleSelectObject(
+                                obj.id,
+                                Boolean(e.shiftKey || e.ctrlKey || e.metaKey),
+                              )
+                            }
+                          >
+                            {layerName}
+                          </button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => toggleLayerVisibility(obj.id)}
+                          >
+                            {obj.visible === false ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => toggleLayerLock(obj.id)}
+                          >
+                            {obj.draggable === false ? (
+                              <Lock className="h-3.5 w-3.5" />
+                            ) : (
+                              <LockOpen className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              setLayerRenameId(obj.id);
+                              setLayerRenameValue(layerName);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>}
+      </Card>
+
+      <ContextMenuContent className="w-72 rounded-xl border-zinc-800 bg-zinc-950/95 p-1.5 text-zinc-100 backdrop-blur-xl">
         <ContextMenuSub>
-          <ContextMenuSubTrigger>Canvas Background</ContextMenuSubTrigger>
-          <ContextMenuSubContent className="w-40">
+          <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
+            <PaintRoller className="mr-2 h-4 w-4" /> Canvas Background
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-44 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
             {CANVAS_BACKGROUND_PRESETS.map((preset) => (
-              <ContextMenuItem key={preset.value} onClick={() => setCanvasBackground(preset.value)}>
+              <ContextMenuItem
+                key={preset.value}
+                onClick={() => setCanvasBackground(preset.value)}
+                className="rounded-md px-2 py-1.5 text-xs"
+              >
                 <div
-                  className="w-4 h-4 rounded-full mr-2 border border-border"
+                  className="mr-2 h-4 w-4 rounded-full border border-zinc-700"
                   style={{ backgroundColor: preset.value }}
                 />
                 {preset.label}
@@ -1520,47 +2242,45 @@ function Canvas({
           </ContextMenuSubContent>
         </ContextMenuSub>
         <ContextMenuSeparator />
-        {selectedId ? (
-          <>
-            <ContextMenuItem onClick={() => addCanvasItem("image")}>Add Image</ContextMenuItem>
-            <ContextMenuItem onClick={addImageFromUrl}>Add Image From URL</ContextMenuItem>
-            <ContextMenuItem onClick={() => addCanvasItem("sprite")}>Add Sprite</ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem
-              onClick={() => {
-                const obj = objects.find((o) => o.id === selectedId);
-                if (obj) {
-                  setHistory((prev) => [...prev, [...objects]]);
-                  setRedoStack([]);
-                  setObjects((prev: any[]) => [
-                    ...prev,
-                    {
-                      ...obj,
-                      id: `${obj.type}-${uuidv4()}`,
-                      x: obj.x + 20,
-                      y: obj.y + 20,
-                    },
-                  ]);
-                }
-              }}
-            >
-              <Copy className="w-4 h-4 mr-2" /> Duplicate
-            </ContextMenuItem>
 
+        <ContextMenuSub>
+          <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
+            <Plus className="mr-2 h-4 w-4" /> Insert
+          </ContextMenuSubTrigger>
+          <ContextMenuSubContent className="w-44 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
+            <ContextMenuItem onClick={() => addCanvasItem("text")} className="rounded-md px-2 py-1.5 text-xs">Add Text</ContextMenuItem>
+            <ContextMenuItem onClick={() => addCanvasItem("wedge")} className="rounded-md px-2 py-1.5 text-xs">Add Wedge</ContextMenuItem>
+            <ContextMenuItem onClick={() => addCanvasItem("image")} className="rounded-md px-2 py-1.5 text-xs">Add Image</ContextMenuItem>
+            <ContextMenuItem onClick={addImageFromUrl} className="rounded-md px-2 py-1.5 text-xs">Add Image From URL</ContextMenuItem>
+            <ContextMenuItem onClick={openImageUploadPicker} className="rounded-md px-2 py-1.5 text-xs">Upload Image</ContextMenuItem>
+            <ContextMenuItem onClick={() => addCanvasItem("sprite")} className="rounded-md px-2 py-1.5 text-xs">Add Sprite</ContextMenuItem>
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+
+        {selectedIds.length > 0 ? (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuItem onClick={copySelectionToClipboard} className="rounded-md px-2 py-1.5 text-xs">
+              <Copy className="mr-2 h-4 w-4" /> Copy Selection
+            </ContextMenuItem>
+            <ContextMenuItem onClick={duplicateSelection} className="rounded-md px-2 py-1.5 text-xs">
+              <Copy className="mr-2 h-4 w-4" /> Duplicate Selection
+            </ContextMenuItem>
             <ContextMenuSub>
-              <ContextMenuSubTrigger>
-                <PaintRoller className="w-4 h-4 mr-2" /> Color
+              <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
+                <PaintRoller className="mr-2 h-4 w-4" /> Fill
               </ContextMenuSubTrigger>
-              <ContextMenuSubContent className="w-32">
+              <ContextMenuSubContent className="w-36 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
                 {["#3b82f6", "#ef4444", "#22c55e", "#000000"].map((c) => (
                   <ContextMenuItem
                     key={c}
-                    onClick={() => updateObj(selectedId, { fill: c })}
+                    onClick={() => applyFillToSelection(c)}
+                    className="rounded-md px-2 py-1.5 text-xs"
                   >
                     <div
-                      className="w-4 h-4 rounded-full mr-2 border border-border"
+                      className="mr-2 h-4 w-4 rounded-full border border-zinc-700"
                       style={{ backgroundColor: c }}
-                    />{" "}
+                    />
                     {c}
                   </ContextMenuItem>
                 ))}
@@ -1568,166 +2288,222 @@ function Canvas({
             </ContextMenuSub>
 
             <ContextMenuSub>
-              <ContextMenuSubTrigger>
-                <Wand2 className="w-4 h-4 mr-2" /> Filters
+              <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
+                <Layers className="mr-2 h-4 w-4" /> Order
               </ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                <ContextMenuItem
-                  onClick={() =>
-                    updateObj(selectedId, {
-                      blur: !selectedObject?.blur,
-                      blurValue: 10,
-                    })
-                  }
-                >
-                  {selectedObject?.blur ? "Remove Blur" : "Add Blur"}
+              <ContextMenuSubContent className="w-40 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
+                <ContextMenuItem onClick={() => moveSelectionLayer("front")} className="rounded-md px-2 py-1.5 text-xs">
+                  <BringToFront className="mr-2 h-4 w-4" /> Bring To Front
                 </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={() =>
-                    updateObj(selectedId, {
-                      grayscale: !selectedObject?.grayscale,
-                    })
-                  }
-                >
-                  {selectedObject?.grayscale ? "Remove Grayscale" : "Grayscale"}
+                <ContextMenuItem onClick={() => moveSelectionLayer("forward")} className="rounded-md px-2 py-1.5 text-xs">
+                  <MoveUp className="mr-2 h-4 w-4" /> Bring Forward
                 </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={() =>
-                    updateObj(selectedId, { invert: !selectedObject?.invert })
-                  }
-                >
-                  Invert Colors
+                <ContextMenuItem onClick={() => moveSelectionLayer("backward")} className="rounded-md px-2 py-1.5 text-xs">
+                  <MoveDown className="mr-2 h-4 w-4" /> Send Backward
+                </ContextMenuItem>
+                <ContextMenuItem onClick={() => moveSelectionLayer("back")} className="rounded-md px-2 py-1.5 text-xs">
+                  <SendToBack className="mr-2 h-4 w-4" /> Send To Back
                 </ContextMenuItem>
               </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuSub>
-              <ContextMenuSubTrigger>
-                <Zap className="w-4 h-4 mr-2" /> Animations
-              </ContextMenuSubTrigger>
-              <ContextMenuSubContent>
-                <ContextMenuItem
-                  onClick={() => updateObj(selectedId, { animation: "none" })}
-                >
-                  None
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={() => updateObj(selectedId, { animation: "spin" })}
-                >
-                  Spinning
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={() => updateObj(selectedId, { animation: "pulse" })}
-                >
-                  Pulse
-                </ContextMenuItem>
-              </ContextMenuSubContent>
-            </ContextMenuSub>
+            <ContextMenuItem onClick={groupSelection} className="rounded-md px-2 py-1.5 text-xs" disabled={selectedIds.length < 2}>
+              <Group className="mr-2 h-4 w-4" /> Group Selection
+            </ContextMenuItem>
+            <ContextMenuItem onClick={ungroupSelection} className="rounded-md px-2 py-1.5 text-xs">
+              <Ungroup className="mr-2 h-4 w-4" /> Ungroup
+            </ContextMenuItem>
 
-            <ContextMenuSeparator />
-            <ContextMenuItem onClick={() => moveSelectionLayer("front")}>Bring To Front</ContextMenuItem>
-            <ContextMenuItem onClick={() => moveSelectionLayer("back")}>Send To Back</ContextMenuItem>
-            <ContextMenuSeparator />
-            <ContextMenuItem onClick={markForGrouping}>Mark For Group</ContextMenuItem>
-            <ContextMenuItem onClick={unmarkForGrouping}>Unmark From Group</ContextMenuItem>
-            {groupDraftIds.length >= 2 && (
-              <ContextMenuItem onClick={groupMarkedShapes}>Create Group ({groupDraftIds.length})</ContextMenuItem>
-            )}
-            {!!selectedObject?.groupId && (
-              <ContextMenuItem onClick={ungroupSelectedShape}>Ungroup</ContextMenuItem>
-            )}
-            {!!selectedObject && selectedObject.type === "sprite" && (
+            {selectedIds.length === 1 && (
               <ContextMenuSub>
-                <ContextMenuSubTrigger>Sprite</ContextMenuSubTrigger>
-                <ContextMenuSubContent>
-                  <ContextMenuItem onClick={() => updateObj(selectedObject.id, { animation: "idle" })}>Set Idle</ContextMenuItem>
+                <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
+                  <Wand2 className="mr-2 h-4 w-4" /> Filters
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className="w-44 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedId!, {
+                        blur: !selectedObject?.blur,
+                        blurValue: 10,
+                      })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    {selectedObject?.blur ? "Remove Blur" : "Add Blur"}
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedId!, {
+                        grayscale: !selectedObject?.grayscale,
+                      })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    {selectedObject?.grayscale ? "Remove Grayscale" : "Grayscale"}
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedId!, { invert: !selectedObject?.invert })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Invert Colors
+                  </ContextMenuItem>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
+
+            {selectedIds.length === 1 && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
+                  <Zap className="mr-2 h-4 w-4" /> Animation
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent className="w-40 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
+                  <ContextMenuItem onClick={() => updateObj(selectedId!, { animation: "none" })} className="rounded-md px-2 py-1.5 text-xs">None</ContextMenuItem>
+                  <ContextMenuItem onClick={() => updateObj(selectedId!, { animation: "spin" })} className="rounded-md px-2 py-1.5 text-xs">Spinning</ContextMenuItem>
+                  <ContextMenuItem onClick={() => updateObj(selectedId!, { animation: "pulse" })} className="rounded-md px-2 py-1.5 text-xs">Pulse</ContextMenuItem>
+                </ContextMenuSubContent>
+              </ContextMenuSub>
+            )}
+
+            {selectedIds.length === 1 && !!selectedObject && selectedObject.type === "sprite" && (
+              <ContextMenuSub>
+                <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">Sprite</ContextMenuSubTrigger>
+                <ContextMenuSubContent className="w-40 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
+                  <ContextMenuItem
+                    onClick={() => updateObj(selectedObject.id, { animation: "idle" })}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Set Idle
+                  </ContextMenuItem>
                   <ContextMenuItem
                     onClick={() =>
                       updateObj(selectedObject.id, {
                         animation: "punch",
                         punchNonce: Date.now(),
-                        onAnimationDone: () => updateObj(selectedObject.id, { animation: "idle" }),
+                        onAnimationDone: () =>
+                          updateObj(selectedObject.id, { animation: "idle" }),
                       })
                     }
+                    className="rounded-md px-2 py-1.5 text-xs"
                   >
                     Punch Once
                   </ContextMenuItem>
-                  <ContextMenuItem onClick={() => updateObj(selectedObject.id, { frameRate: (selectedObject.frameRate || 7) + 1 })}>Increase FPS</ContextMenuItem>
-                  <ContextMenuItem onClick={() => updateObj(selectedObject.id, { frameRate: Math.max(1, (selectedObject.frameRate || 7) - 1) })}>Decrease FPS</ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedObject.id, {
+                        frameRate: (selectedObject.frameRate || 7) + 1,
+                      })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Increase FPS
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedObject.id, {
+                        frameRate: Math.max(1, (selectedObject.frameRate || 7) - 1),
+                      })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Decrease FPS
+                  </ContextMenuItem>
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
-            {isSelectedMedia && (
+
+            {selectedIds.length === 1 && isSelectedMedia && (
               <ContextMenuSub>
-                <ContextMenuSubTrigger>Media</ContextMenuSubTrigger>
-                <ContextMenuSubContent>
-                  <ContextMenuItem onClick={openMediaPicker}>Load/Replace Image</ContextMenuItem>
-                  <ContextMenuItem onClick={replaceSelectedMediaFromUrl}>Replace From URL</ContextMenuItem>
-                  <ContextMenuItem onClick={() => rotateSelectedMedia(-90)}>Rotate -90°</ContextMenuItem>
-                  <ContextMenuItem onClick={() => rotateSelectedMedia(90)}>Rotate +90°</ContextMenuItem>
-                  <ContextMenuItem onClick={() => flipSelectedMedia("x")}>Flip Horizontal</ContextMenuItem>
-                  <ContextMenuItem onClick={() => flipSelectedMedia("y")}>Flip Vertical</ContextMenuItem>
-                  <ContextMenuItem onClick={resetSelectedMediaTransform}>Reset Transform</ContextMenuItem>
-                  <ContextMenuItem onClick={exportSelectedMediaPng}>Save Selected as PNG</ContextMenuItem>
+                <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">Media</ContextMenuSubTrigger>
+                <ContextMenuSubContent className="w-44 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
+                  <ContextMenuItem onClick={openMediaPicker} className="rounded-md px-2 py-1.5 text-xs">Load/Replace Image</ContextMenuItem>
+                  <ContextMenuItem onClick={replaceSelectedMediaFromUrl} className="rounded-md px-2 py-1.5 text-xs">Replace From URL</ContextMenuItem>
+                  <ContextMenuItem onClick={() => rotateSelectedMedia(-90)} className="rounded-md px-2 py-1.5 text-xs">Rotate -90°</ContextMenuItem>
+                  <ContextMenuItem onClick={() => rotateSelectedMedia(90)} className="rounded-md px-2 py-1.5 text-xs">Rotate +90°</ContextMenuItem>
+                  <ContextMenuItem onClick={() => flipSelectedMedia("x")} className="rounded-md px-2 py-1.5 text-xs">Flip Horizontal</ContextMenuItem>
+                  <ContextMenuItem onClick={() => flipSelectedMedia("y")} className="rounded-md px-2 py-1.5 text-xs">Flip Vertical</ContextMenuItem>
+                  <ContextMenuItem onClick={resetSelectedMediaTransform} className="rounded-md px-2 py-1.5 text-xs">Reset Transform</ContextMenuItem>
+                  <ContextMenuItem onClick={exportSelectedMediaPng} className="rounded-md px-2 py-1.5 text-xs">Save Selected as PNG</ContextMenuItem>
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
-            {!!selectedObject && selectedObject.type === "text" && (
+
+            {selectedIds.length === 1 && !!selectedObject && selectedObject.type === "text" && (
               <>
-                <ContextMenuItem
-                  onClick={() => {
-                    const nextText = window.prompt("Edit text", selectedObject.text || "") ?? selectedObject.text;
-                    updateObj(selectedObject.id, { text: nextText });
-                  }}
-                >
-                  Edit Text
-                </ContextMenuItem>
-                <ContextMenuItem onClick={() => updateObj(selectedObject.id, { fontSize: (selectedObject.fontSize || 20) + 2 })}>Increase Font</ContextMenuItem>
-                <ContextMenuItem onClick={() => updateObj(selectedObject.id, { fontSize: Math.max(10, (selectedObject.fontSize || 20) - 2) })}>Decrease Font</ContextMenuItem>
                 <ContextMenuItem
                   onClick={() =>
                     updateObj(selectedObject.id, {
-                      fontStyle: selectedObject.fontStyle === "bold" ? "normal" : "bold",
+                      fontSize: (selectedObject.fontSize || 20) + 2,
                     })
                   }
+                  className="rounded-md px-2 py-1.5 text-xs"
+                >
+                  Increase Font
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onClick={() =>
+                    updateObj(selectedObject.id, {
+                      fontSize: Math.max(10, (selectedObject.fontSize || 20) - 2),
+                    })
+                  }
+                  className="rounded-md px-2 py-1.5 text-xs"
+                >
+                  Decrease Font
+                </ContextMenuItem>
+                <ContextMenuItem
+                  onClick={() =>
+                    updateObj(selectedObject.id, {
+                      fontStyle:
+                        selectedObject.fontStyle === "bold" ? "normal" : "bold",
+                    })
+                  }
+                  className="rounded-md px-2 py-1.5 text-xs"
                 >
                   Toggle Bold
                 </ContextMenuItem>
+                <ContextMenuItem
+                  onClick={() => {
+                    const nextText =
+                      window.prompt("Edit text", selectedObject.text || "") ??
+                      selectedObject.text;
+                    updateObj(selectedObject.id, { text: nextText });
+                  }}
+                  className="rounded-md px-2 py-1.5 text-xs"
+                >
+                  Edit Text
+                </ContextMenuItem>
               </>
             )}
+
             <ContextMenuSeparator />
             <ContextMenuItem
               variant="destructive"
-              onClick={() => {
-                setHistory((prev) => [...prev, [...objects]]);
-                setRedoStack([]);
-                setObjects((prev: any[]) => prev.filter((o) => o.id !== selectedId));
-                setSelectedId(null);
-              }}
+              onClick={deleteSelection}
+              className="rounded-md px-2 py-1.5 text-xs text-red-300"
             >
-              <Trash2 className="w-4 h-4 mr-2" /> Delete
+              <Trash2 className="mr-2 h-4 w-4" /> Delete Selection
             </ContextMenuItem>
           </>
         ) : (
           <>
-            <ContextMenuItem onClick={() => addCanvasItem("text")}>Add Text</ContextMenuItem>
-            <ContextMenuItem onClick={() => addCanvasItem("wedge")}>Add Wedge</ContextMenuItem>
-            <ContextMenuItem onClick={() => addCanvasItem("image")}>Add Image</ContextMenuItem>
-            <ContextMenuItem onClick={addImageFromUrl}>Add Image From URL</ContextMenuItem>
-            <ContextMenuItem onClick={() => addCanvasItem("sprite")}>Add Sprite</ContextMenuItem>
-            <ContextMenuSeparator />
             {groupDraftIds.length >= 2 && (
-              <ContextMenuItem onClick={groupMarkedShapes}>Create Group ({groupDraftIds.length})</ContextMenuItem>
+              <ContextMenuItem onClick={groupMarkedShapes} className="rounded-md px-2 py-1.5 text-xs">
+                Create Group ({groupDraftIds.length})
+              </ContextMenuItem>
             )}
             <ContextMenuSeparator />
             <ContextMenuItem
+              className="rounded-md px-2 py-1.5 text-xs"
               onClick={() => {
                 const stage = currentStage.current;
                 if (!stage) return;
 
-                const link = document.createElement('a');
+                const link = document.createElement("a");
                 link.href = stage.toDataURL({ pixelRatio: 2 });
-                const drawingName = drawings.find((d) => d.id === currentDrawingId)?.name || 'canvas';
+                const drawingName =
+                  drawings.find((d) => d.id === currentDrawingId)?.name ||
+                  "canvas";
                 link.download = `${drawingName}-${Date.now()}.png`;
                 link.click();
               }}
@@ -1744,6 +2520,13 @@ function Canvas({
         onChange={handleMediaFileChange}
         className="hidden"
       />
+      <input
+        ref={addImageFileRef}
+        type="file"
+        accept="image/*"
+        onChange={handleAddImageFileChange}
+        className="hidden"
+      />
     </ContextMenu>
   );
 }
@@ -1758,7 +2541,15 @@ const CanvasBoard = () => {
   const [drawSize, setDrawSize] = useState(3);
   const [drawStyle, setDrawStyle] = useState<BrushStyle>("solid");
   const { CanvasBoard, setCanvasBoard } = useCanvasState() as any;
-  const { drawings, currentDrawingId, setCurrentDrawingId, updateCurrentDrawing } = useDrawings();
+  const {
+    drawings,
+    currentDrawingId,
+    setCurrentDrawingId,
+    createDrawing,
+    renameDrawing,
+    deleteDrawing,
+    updateCurrentDrawing,
+  } = useDrawings();
 
   // Initialize persistence
   const { syncToYjs } = useCanvasPersistence(setObjects as any);
@@ -1802,6 +2593,8 @@ const CanvasBoard = () => {
     updateCurrentDrawing(objects);
   };
 
+  const { toggleSidebar, state } = useSidebar();
+
   return (
     <>
       <div className="relative w-full h-full overflow-hidden bg-background">
@@ -1810,12 +2603,31 @@ const CanvasBoard = () => {
           setObjects={setObjects}
           drawings={drawings}
           currentDrawingId={currentDrawingId}
+          setCurrentDrawingId={setCurrentDrawingId}
+          createDrawing={createDrawing}
+          renameDrawing={renameDrawing}
+          deleteDrawing={deleteDrawing}
           activeTool={activeTool}
           drawTool={drawTool}
           drawColor={drawColor}
           drawSize={drawSize}
           drawStyle={drawStyle}
           onManualSave={handleManualSave}
+          onShortcutToolSelect={(tool) => {
+            setActiveTool(tool);
+            if (tool === "draw") {
+              setCanvasBoard((prev: any) => ({ ...prev, pendingShape: null }));
+            }
+          }}
+          onShortcutDrawToolChange={(tool) => {
+            setDrawTool(tool);
+            setActiveTool("draw");
+            setCanvasBoard((prev: any) => ({ ...prev, pendingShape: null }));
+          }}
+          onShortcutAddShape={(type) => {
+            setActiveTool("select");
+            setCanvasBoard((prev: any) => ({ ...prev, pendingShape: type }));
+          }}
         />
         <BrushPanel
           activeTool={activeTool}
@@ -1841,14 +2653,20 @@ const CanvasBoard = () => {
             setCanvasBoard((prev: any) => ({ ...prev, pendingShape: type }));
           }}
         />
-        
+
+        <div className="">
+          <div className="fixed cursor-pointer top-4  translate-x-1/2 bg-background p-2 rounded-sm shadow-2xl border border-border flex items-center gap-2 z-60">
+            <PanelLeftIcon size={20} onClick={() => toggleSidebar()} />
+          </div>
+        </div>
+
         <div className="fixed top-4 right-4 bg-background px-3 py-2 rounded border border-border z-50 shadow-sm flex items-center gap-3">
           {/* Editing label */}
           {currentDrawingId && (
             <div className="flex items-center gap-2 pr-3 border-r border-border">
-              <p className="text-xs text-sidebar-foreground/60">Editing:</p>
               <p className="text-sm font-semibold text-sidebar-foreground max-w-37.5 truncate">
-                {drawings.find((d) => d.id === currentDrawingId)?.name || "Untitled"}
+                {drawings.find((d) => d.id === currentDrawingId)?.name ||
+                  "Untitled"}
               </p>
             </div>
           )}

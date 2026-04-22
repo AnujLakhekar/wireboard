@@ -53,13 +53,11 @@ export function AutoSaveIndicator() {
       {saveStatus === "saving" && (
         <>
           <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-          <span className="text-xs text-sidebar-foreground/60">Saving...</span>
         </>
       )}
       {saveStatus === "saved" && (
         <>
           <CheckCircle2 className="w-4 h-4 text-green-500" />
-          <span className="text-xs text-sidebar-foreground/60">Saved {timeSinceLastSave}</span>
         </>
       )}
       {saveStatus === "error" && (
@@ -71,7 +69,6 @@ export function AutoSaveIndicator() {
       {saveStatus === "idle" && timeSinceLastSave && (
         <>
           <CheckCircle2 className="w-4 h-4 text-green-500" />
-          <span className="text-xs text-sidebar-foreground/60">All saved {timeSinceLastSave}</span>
         </>
       )}
     </div>
