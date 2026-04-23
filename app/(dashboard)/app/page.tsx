@@ -64,6 +64,7 @@ import {
   Pen,
   Sliders,
   PanelLeftIcon,
+  Code,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -77,17 +78,37 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import { useCanvasState } from "@/providers/CanvasStateProvider";
 import { useCanvasPersistence } from "@/hooks/use-canvas-persistence";
 import { useDrawings } from "@/providers/DrawingsProvider";
 import { AutoSaveIndicator } from "@/components/auto-save-indicator";
 import { useCanvasStore } from "@/store/useCanvasStore";
+import { useCanvasUIStore } from "@/store/useCanvasUIStore";
 import { Slider } from "@/components/ui/slider";
 import useImage from "use-image";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Editor from "@monaco-editor/react";
+
+const spriteCodeBlockSample = `function SpriteBehavior(sprite, frame, time) {
+  const radius = 100;
+  const angle = (time / 3000) * Math.PI * 2;
+
+  const x = sprite.startX + Math.cos(angle) * radius;
+  const y = sprite.startY + Math.sin(angle) * radius;
+
+  sprite.moveTo(x, y);
+}`;
 
 const Exporter = () => {
   return <></>;
@@ -437,6 +458,338 @@ const CanvasSpriteShape = ({
   );
 };
 
+// --- Sprite Script Editor Modal ---
+const SpriteScriptEditor = ({
+  isOpen,
+  onClose,
+  spriteObj,
+  onSave,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  spriteObj: any;
+  onSave: (scriptCode: string) => void;
+}) => {
+  const [code, setCode] = useState(spriteObj?.script || "");
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState<"script" | "guide">("script");
+  const [editorTheme, setEditorTheme] = useState<"vs-dark" | "vs">("vs-dark");
+
+  useEffect(() => {
+    if (isOpen) {
+      setCode(spriteObj?.script || "");
+      setError("");
+      setTab("script");
+    }
+  }, [isOpen, spriteObj?.id, spriteObj?.script]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const syncTheme = () => {
+      setEditorTheme(root.classList.contains("dark") ? "vs-dark" : "vs");
+    };
+
+    syncTheme();
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+
+    return () => observer.disconnect();
+  }, []);
+
+  const handleSave = () => {
+    setError("");
+    try {
+      // Validate syntax by attempting to create a function
+      new Function("sprite", "frame", "time", code);
+      onSave(code);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Invalid script syntax");
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="max-w-4xl border-zinc-700 bg-zinc-900 p-0 text-zinc-100 sm:max-w-4xl"
+        showCloseButton={false}
+      >
+        <DialogHeader className="shrink-0 border-b border-zinc-700 px-6 pt-6 pb-4">
+          <DialogTitle className="text-xl flex items-center gap-3 text-zinc-100">
+            <Code className="w-6 h-6 text-blue-400" />
+            Sprite Script Editor
+          </DialogTitle>
+          <DialogDescription className="text-xs text-zinc-400 mt-2">
+            Real-time script execution for game-like sprite behavior
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs value={tab} onValueChange={(v) => setTab(v as "script" | "guide")} className="flex max-h-[70vh] flex-col overflow-hidden">
+          <TabsList className="shrink-0 w-full justify-start bg-zinc-950 border-b border-zinc-700 rounded-none h-auto p-0">
+            <TabsTrigger
+              value="script"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent data-[state=active]:text-blue-400 px-4 py-2"
+            >
+              <Code className="w-4 h-4 mr-2" /> Script Code
+            </TabsTrigger>
+            <TabsTrigger
+              value="guide"
+              className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-500 data-[state=active]:bg-transparent data-[state=active]:text-blue-400 px-4 py-2"
+            >
+              <Pencil className="w-4 h-4 mr-2" /> Quick Reference
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="script" className="flex flex-1 flex-col gap-4 overflow-hidden p-4 mt-0">
+            <div className="flex-1 flex flex-col gap-2 min-h-0">
+              <label className="text-xs font-semibold text-zinc-300 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                Script Code (executed every frame)
+              </label>
+              <div className="h-[340px] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950">
+                <Editor
+                  language="javascript"
+                  value={code}
+                  theme={editorTheme}
+                  onChange={(value) => {
+                    setCode(value ?? "");
+                    setError("");
+                  }}
+                  options={{
+                    automaticLayout: true,
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 14,
+                    fontFamily:
+                      "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                    lineNumbers: "on",
+                    roundedSelection: false,
+                    tabSize: 2,
+                    insertSpaces: true,
+                    wordWrap: "on",
+                    padding: { top: 12, bottom: 12 },
+                    smoothScrolling: true,
+                  }}
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-4 bg-red-950/50 border border-red-700/50 rounded-lg text-xs text-red-200 font-mono">
+                <div className="font-semibold mb-1 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-400"></span>
+                  Syntax Error
+                </div>
+                {error}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="guide" className="flex-1 overflow-y-auto p-4 mt-0">
+            <div className="space-y-4 text-sm text-zinc-300">
+              <div>
+                <h4 className="font-semibold text-zinc-100 mb-2 flex items-center gap-2">
+                  <span className="text-blue-400">▸</span> Sprite API
+                </h4>
+                <div className="bg-zinc-950 border border-zinc-700 rounded-lg p-3 font-mono text-xs space-y-1 text-zinc-400">
+                  <div><span className="text-emerald-400">sprite.move</span>(dx, dy) - Relative movement</div>
+                  <div><span className="text-emerald-400">sprite.moveTo</span>(x, y) - Absolute position</div>
+                  <div><span className="text-emerald-400">sprite.rotate</span>(angle) - Add rotation</div>
+                  <div><span className="text-emerald-400">sprite.setVelocity</span>(vx, vy) - Continuous movement</div>
+                  <div><span className="text-emerald-400">sprite.setAnimation</span>(name) - Change animation</div>
+                </div>
+              </div>
+              <div>
+                <h4 className="font-semibold text-zinc-100 mb-2 flex items-center gap-2">
+                  <span className="text-blue-400">▸</span> Available Variables
+                </h4>
+                <div className="bg-zinc-950 border border-zinc-700 rounded-lg p-3 font-mono text-xs space-y-1 text-zinc-400">
+                  <div><span className="text-amber-400">frame</span> - Frame counter (~60fps)</div>
+                  <div><span className="text-amber-400">time</span> - Elapsed ms since script start</div>
+                  <div><span className="text-amber-400">sprite</span> - Current sprite object</div>
+                </div>
+              </div>
+              <div className="overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950">
+                <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2 text-[11px] text-zinc-400">
+                  <span>sprite-script.js</span>
+                  <span className="uppercase tracking-wide">JavaScript</span>
+                </div>
+                <div className="h-[220px]">
+                  <Editor
+                    language="javascript"
+                    value={spriteCodeBlockSample}
+                    theme={editorTheme}
+                    options={{
+                      automaticLayout: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      readOnly: true,
+                      fontSize: 13,
+                      fontFamily:
+                        "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+                      lineNumbers: "on",
+                      roundedSelection: false,
+                      tabSize: 2,
+                      insertSpaces: true,
+                      wordWrap: "on",
+                      padding: { top: 10, bottom: 10 },
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="bg-blue-950/30 border border-blue-700/30 rounded-lg p-3">
+                <p className="text-xs text-blue-300">Tip: Use Math functions like Math.sin(), Math.cos(), Math.random() for advanced behavior</p>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter className="shrink-0 border-t border-zinc-700 bg-zinc-950 p-4 flex gap-2 justify-end">
+          <Button
+            onClick={onClose}
+            variant="outline"
+            className="px-6 bg-zinc-800 hover:bg-zinc-700 border-zinc-600 text-zinc-100 text-sm"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSave}
+            className="px-6 bg-linear-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-sm font-medium"
+          >
+            <Check className="w-4 h-4 mr-2" />
+            Save Script
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// --- Sprite Management Modal ---
+const SpriteManager = ({
+  isOpen,
+  onClose,
+  spriteObj,
+  onSpriteUpdate,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  spriteObj: any;
+  onSpriteUpdate: (updates: any) => void;
+}) => {
+  const [spriteUrl, setSpriteUrl] = useState(spriteObj?.src || "");
+  const spriteInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSpriteUrl(spriteObj?.src || "");
+    }
+  }, [isOpen, spriteObj?.id, spriteObj?.src]);
+
+  const handleSpriteFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setSpriteUrl(dataUrl);
+      onSpriteUpdate({ src: dataUrl });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleUrlChange = () => {
+    if (spriteUrl) {
+      onSpriteUpdate({ src: spriteUrl });
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="max-w-md border-zinc-700 bg-zinc-900 text-zinc-100"
+        showCloseButton={false}
+      >
+        <DialogHeader className="border-b border-zinc-700 pb-3">
+          <DialogTitle className="text-lg flex items-center gap-2 text-zinc-100">
+            <Pencil className="w-5 h-5 text-purple-400" />
+            Manage Sprite
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-xs font-semibold text-zinc-300 flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+              Sprite Image
+            </label>
+            <div className="space-y-2">
+              <Button
+                onClick={() => spriteInputRef.current?.click()}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white text-sm"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Upload Sprite Image
+              </Button>
+              <input
+                ref={spriteInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleSpriteFileChange}
+                className="hidden"
+              />
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span className="text-xs text-zinc-500">or</span>
+            </div>
+            <Separator className="bg-zinc-700" />
+          </div>
+
+          <div>
+            <label className="text-xs font-semibold text-zinc-300 mb-2 block">Sprite URL</label>
+            <div className="flex gap-2">
+              <Input
+                value={spriteUrl}
+                onChange={(e) => setSpriteUrl(e.target.value)}
+                placeholder="https://example.com/sprite.png"
+                className="bg-zinc-950 border-zinc-700 text-zinc-100 text-xs"
+              />
+              <Button
+                onClick={handleUrlChange}
+                size="sm"
+                className="bg-purple-600 hover:bg-purple-700 text-white px-3"
+              >
+                Load
+              </Button>
+            </div>
+          </div>
+
+          <div className="p-3 bg-zinc-950 border border-zinc-700 rounded-lg">
+            <p className="text-xs text-zinc-400">
+              <strong>Tip:</strong> Use sprite sheets for animations. Sprites work best with PNG images.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2 justify-end border-t border-zinc-700 bg-zinc-950">
+          <Button
+            onClick={onClose}
+            variant="outline"
+            className="px-4 bg-zinc-800 hover:bg-zinc-700 border-zinc-600 text-zinc-100 text-sm"
+          >
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 // --- Shape Component (Handles Individual Animations and Filters) ---
 const ShapeRenderer = React.memo(
   ({ id, onSelect, onDragEnd, updateObj, isInteractionEnabled }: any) => {
@@ -642,16 +995,45 @@ function Canvas({
   onShortcutDrawToolChange: (tool: DrawTool) => void;
   onShortcutAddShape: (type: string) => void;
 }) {
-  const [scale, setScale] = useState(1);
-  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+  // UI State from Zustand
+  const scale = useCanvasUIStore((state) => state.scale);
+  const setScale = useCanvasUIStore((state) => state.setScale);
+  const stagePos = useCanvasUIStore((state) => state.stagePos);
+  const setStagePos = useCanvasUIStore((state) => state.setStagePos);
+  const selectedIds = useCanvasUIStore((state) => state.selectedIds);
+  const setSelectedIds = useCanvasUIStore((state) => state.setSelectedIds);
+  const groupDraftIds = useCanvasUIStore((state) => state.groupDraftIds);
+  const setGroupDraftIds = useCanvasUIStore((state) => state.setGroupDraftIds);
+  const isPanning = useCanvasUIStore((state) => state.isPanning);
+  const setIsPanning = useCanvasUIStore((state) => state.setIsPanning);
+  const clipboard = useCanvasUIStore((state) => state.clipboard);
+  const setClipboard = useCanvasUIStore((state) => state.setClipboard);
+  const redoStack = useCanvasUIStore((state) => state.redoStack);
+  const setRedoStack = useCanvasUIStore((state) => state.setRedoStack);
+  const cursorPos = useCanvasUIStore((state) => state.cursorPos);
+  const setCursorPos = useCanvasUIStore((state) => state.setCursorPos);
+  const isWorkspacePanelCollapsed = useCanvasUIStore((state) => state.isWorkspacePanelCollapsed);
+  const setIsWorkspacePanelCollapsed = useCanvasUIStore((state) => state.setIsWorkspacePanelCollapsed);
+  const layerRenameId = useCanvasUIStore((state) => state.layerRenameId);
+  const setLayerRenameId = useCanvasUIStore((state) => state.setLayerRenameId);
+  const layerRenameValue = useCanvasUIStore((state) => state.layerRenameValue);
+  const setLayerRenameValue = useCanvasUIStore((state) => state.setLayerRenameValue);
+  const scriptEditorOpen = useCanvasUIStore((state) => state.scriptEditorOpen);
+  const setScriptEditorOpen = useCanvasUIStore((state) => state.setScriptEditorOpen);
+  const spriteManagerOpen = useCanvasUIStore((state) => state.spriteManagerOpen);
+  const setSpriteManagerOpen = useCanvasUIStore((state) => state.setSpriteManagerOpen);
+  const selectedSpriteForScript = useCanvasUIStore((state) => state.selectedSpriteForScript);
+  const setSelectedSpriteForScript = useCanvasUIStore((state) => state.setSelectedSpriteForScript);
+  const selectedSpriteForManager = useCanvasUIStore((state) => state.selectedSpriteForManager);
+  const setSelectedSpriteForManager = useCanvasUIStore((state) => state.setSelectedSpriteForManager);
+  const canvasBackground = useCanvasUIStore((state) => state.canvasBackground);
+  const setCanvasBackground = useCanvasUIStore((state) => state.setCanvasBackground);
+
+  // Local state only (non-UI preferences)
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const [cursorPos, setCursorPos] = useState({ x: 0, y: 0 });
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [groupDraftIds, setGroupDraftIds] = useState<string[]>([]);
-  const [isPanning, setIsPanning] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
-  const [clipboard, setClipboard] = useState<any[] | null>(null);
-  const [redoStack, setRedoStack] = useState<any[]>([]); // For RedoF
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+
   const trRef = useRef<Konva.Transformer>(null);
   const currentStage = useRef<Konva.Stage>(null);
   const isDrawingRef = useRef(false);
@@ -660,16 +1042,15 @@ function Canvas({
   const mediaTargetIdRef = useRef<string | null>(null);
   const router = useRouter();
   const { CanvasBoard, setCanvasBoard } = useCanvasState() as any;
-  const [canvasBackground, setCanvasBackground] = useState("#000");
   const drawingCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingContextRef = useRef<CanvasRenderingContext2D | null>(null);
   const drawingImageRef = useRef<any>(null);
   const lastPosition = useRef<{ x: number; y: number } | null>(null);
   const drawingOriginRef = useRef({ x: 0, y: 0 });
-  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
-  const [isWorkspacePanelCollapsed, setIsWorkspacePanelCollapsed] = useState(false);
-  const [layerRenameId, setLayerRenameId] = useState<string | null>(null);
-  const [layerRenameValue, setLayerRenameValue] = useState("");
+
+  // Sprite script refs
+  const spriteScriptTimersRef = useRef<Map<string, number>>(new Map());
+  const spriteStartTimeRef = useRef<Map<string, number>>(new Map());
   const selectedId = selectedIds[0] ?? null;
 
   const setSelectedId = (id: string | null) => {
@@ -682,11 +1063,10 @@ function Canvas({
       return;
     }
 
-    setSelectedIds((prev) =>
-      prev.includes(id)
-        ? prev.filter((selected) => selected !== id)
-        : [...prev, id],
-    );
+    const newSelection = selectedIds.includes(id)
+      ? selectedIds.filter((selected) => selected !== id)
+      : [...selectedIds, id];
+    setSelectedIds(newSelection);
   };
 
   const getSelectionTargetIds = (source: any[]) => {
@@ -775,20 +1155,87 @@ function Canvas({
     }
   }, [selectedIds, objects]);
 
+  // Sprite script execution effect
   useEffect(() => {
-    setCanvasBoard((prev: any) => {
-      const isSameObjects = prev.objects === objects;
-      const isSameScale = prev.scale === scale;
-      const isSameStagePos =
-        prev.stagePos?.x === stagePos.x && prev.stagePos?.y === stagePos.y;
+    let rafId: number | null = null;
 
-      if (isSameObjects && isSameScale && isSameStagePos) {
-        return prev;
+    const executeFrame = () => {
+      const now = Date.now();
+      
+      objects.forEach((obj) => {
+        if (obj.type !== "sprite" || !obj.script) return;
+
+        // Initialize start time for this sprite
+        if (!spriteStartTimeRef.current.has(obj.id)) {
+          spriteStartTimeRef.current.set(obj.id, now);
+        }
+
+        const startTime = spriteStartTimeRef.current.get(obj.id)!;
+        const elapsed = now - startTime;
+
+        try {
+          // Create sprite API context
+          const spriteAPI = {
+            x: obj.x || 0,
+            y: obj.y || 0,
+            rotation: obj.rotation || 0,
+            startX: obj.startX !== undefined ? obj.startX : obj.x || 0,
+            startY: obj.startY !== undefined ? obj.startY : obj.y || 0,
+            getX: () => obj.x || 0,
+            getY: () => obj.y || 0,
+            move: (dx: number, dy: number) => {
+              updateObj(obj.id, { x: (obj.x || 0) + dx, y: (obj.y || 0) + dy });
+            },
+            moveTo: (x: number, y: number) => {
+              updateObj(obj.id, { x, y });
+            },
+            rotate: (angle: number) => {
+              updateObj(obj.id, { rotation: (obj.rotation || 0) + angle });
+            },
+            setRotation: (angle: number) => {
+              updateObj(obj.id, { rotation: angle });
+            },
+            setAnimation: (name: string) => {
+              updateObj(obj.id, { animation: name });
+            },
+            setVelocity: (vx: number, vy: number) => {
+              updateObj(obj.id, { velocityX: vx, velocityY: vy });
+            },
+            getVelocity: () => ({
+              x: obj.velocityX || 0,
+              y: obj.velocityY || 0,
+            }),
+          };
+
+          // Execute user script with sprite API, frame count, and time
+          const frame = Math.floor(elapsed / 16.67); // ~60fps reference
+          const time = elapsed;
+          
+          new Function("sprite", "frame", "time", obj.script)(spriteAPI, frame, time);
+
+          // Apply velocity if present
+          if (obj.velocityX || obj.velocityY) {
+            updateObj(obj.id, {
+              x: (obj.x || 0) + (obj.velocityX || 0),
+              y: (obj.y || 0) + (obj.velocityY || 0),
+            });
+          }
+        } catch (err) {
+          console.error(`Script error in sprite ${obj.id}:`, err);
+        }
+      });
+
+      rafId = requestAnimationFrame(executeFrame);
+    };
+
+    rafId = requestAnimationFrame(executeFrame);
+
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
       }
-
-      return { ...prev, objects, scale, stagePos };
-    });
-  }, [objects, scale, stagePos, setCanvasBoard]);
+    };
+  }, [objects]);
 
   const updateObj = (id: string, params: any) => {
     setObjects((prev: any[]) => {
@@ -1358,15 +1805,14 @@ function Canvas({
 
   const markForGrouping = () => {
     if (selectedIds.length === 0) return;
-    setGroupDraftIds((prev) => {
-      const merged = new Set([...prev, ...selectedIds]);
-      return Array.from(merged);
-    });
+    const merged = new Set([...groupDraftIds, ...selectedIds]);
+    setGroupDraftIds(Array.from(merged));
   };
 
   const unmarkForGrouping = () => {
     if (selectedIds.length === 0) return;
-    setGroupDraftIds((prev) => prev.filter((id) => !selectedIds.includes(id)));
+    const filtered = groupDraftIds.filter((id) => !selectedIds.includes(id));
+    setGroupDraftIds(filtered);
   };
 
   const groupMarkedShapes = () => {
@@ -1670,7 +2116,7 @@ function Canvas({
             e.preventDefault();
             if (history.length > 0) {
               const previous = history[history.length - 1];
-              setRedoStack((prev) => [...prev, [...objects]]);
+              setRedoStack([...redoStack, [...objects]]);
               setObjects(previous);
               setHistory((prev) => prev.slice(0, -1));
             }
@@ -1682,7 +2128,7 @@ function Canvas({
               const next = redoStack[redoStack.length - 1];
               setHistory((prev) => [...prev, [...objects]]);
               setObjects(next);
-              setRedoStack((prev) => prev.slice(0, -1));
+              setRedoStack(redoStack.slice(0, -1));
             }
           }
           break;
@@ -1945,7 +2391,7 @@ function Canvas({
               size="icon"
               variant="ghost"
               className="h-7 w-7 rounded-full border border-zinc-800 bg-zinc-900/80"
-              onClick={() => setIsWorkspacePanelCollapsed((prev) => !prev)}
+              onClick={() => setIsWorkspacePanelCollapsed(!isWorkspacePanelCollapsed)}
               aria-label={isWorkspacePanelCollapsed ? "Expand workspace panel" : "Collapse workspace panel"}
             >
               <PanelLeftIcon className={`h-3.5 w-3.5 transition-transform ${isWorkspacePanelCollapsed ? "rotate-180" : ""}`} />
@@ -2074,6 +2520,20 @@ function Canvas({
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
+                        {obj.type === "sprite" && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-purple-400 hover:bg-purple-500/20"
+                            onClick={() => {
+                              setSelectedSpriteForManager(obj);
+                              setSpriteManagerOpen(true);
+                            }}
+                            title="Change sprite image"
+                          >
+                            <Code className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2235,6 +2695,25 @@ function Canvas({
                 <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">Sprite</ContextMenuSubTrigger>
                 <ContextMenuSubContent className="w-40 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
                   <ContextMenuItem
+                    onClick={() => {
+                      setSelectedSpriteForScript(selectedObject);
+                      setScriptEditorOpen(true);
+                    }}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    <Code className="mr-2 h-4 w-4" /> Edit Script
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => {
+                      setSelectedSpriteForManager(selectedObject);
+                      setSpriteManagerOpen(true);
+                    }}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    <Pencil className="mr-2 h-4 w-4" /> Change Sprite
+                  </ContextMenuItem>
+                  <ContextMenuSeparator className="bg-zinc-700 my-1" />
+                  <ContextMenuItem
                     onClick={() => updateObj(selectedObject.id, { animation: "idle" })}
                     className="rounded-md px-2 py-1.5 text-xs"
                   >
@@ -2377,6 +2856,35 @@ function Canvas({
           </>
         )}
       </ContextMenuContent>
+      <SpriteScriptEditor
+        isOpen={scriptEditorOpen}
+        onClose={() => {
+          setScriptEditorOpen(false);
+          setSelectedSpriteForScript(null);
+        }}
+        spriteObj={selectedSpriteForScript}
+        onSave={(scriptCode) => {
+          if (selectedSpriteForScript) {
+            updateObj(selectedSpriteForScript.id, { script: scriptCode });
+            // Reset script execution timer for this sprite
+            spriteScriptTimersRef.current.delete(selectedSpriteForScript.id);
+            spriteStartTimeRef.current.delete(selectedSpriteForScript.id);
+          }
+        }}
+      />
+      <SpriteManager
+        isOpen={spriteManagerOpen}
+        onClose={() => {
+          setSpriteManagerOpen(false);
+          setSelectedSpriteForManager(null);
+        }}
+        spriteObj={selectedSpriteForManager}
+        onSpriteUpdate={(updates) => {
+          if (selectedSpriteForManager) {
+            updateObj(selectedSpriteForManager.id, updates);
+          }
+        }}
+      />
       <input
         ref={mediaFileRef}
         type="file"
