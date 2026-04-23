@@ -13,6 +13,7 @@ interface DrawingsContextType {
   renameDrawing: (id: string, newName: string) => void;
   saveStatus: 'idle' | 'saving' | 'saved' | 'error';
   lastSaveTime: number;
+  isSynced: boolean;
 }
 
 const DrawingsContext = createContext<DrawingsContextType | undefined>(undefined);
@@ -26,6 +27,7 @@ export function DrawingsProvider({ children }: { children: React.ReactNode }) {
     updateCurrentDrawing,
     deleteDrawing,
     renameDrawing,
+    isSynced,
     saveStatus,
     lastSaveTime,
   } = useDrawingsManager();
@@ -38,6 +40,7 @@ export function DrawingsProvider({ children }: { children: React.ReactNode }) {
     updateCurrentDrawing,
     deleteDrawing,
     renameDrawing,
+    isSynced,
     saveStatus,
     lastSaveTime,
   };

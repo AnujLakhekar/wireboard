@@ -1,78 +1,64 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import * as Y from "yjs";
-
-const STORAGE_KEY = "wireboard-stage-data";
-const LOCAL_STORAGE_SAVE_INTERVAL = 5000;
+import { IndexeddbPersistence } from "y-indexeddb";
 
 export function useCanvasPersistence(setObjects: (data: any[]) => void) {
   const [doc] = useState(() => new Y.Doc());
   const [isInitialized, setIsInitialized] = useState(false);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // 1. Load from LocalStorage on Mount
-    const savedState = localStorage.getItem(STORAGE_KEY);
-    if (savedState) {
-      try {
-        const uint8array = Uint8Array.from(atob(savedState), (c) => c.charCodeAt(0));
-        Y.applyUpdate(doc, uint8array);
-      } catch (e) {
-        console.error("Failed to load persisted state:", e);
-      }
-    }
+    // 1. Use IndexedDB instead of LocalStorage (it's faster and has more space)
+    // This replaces all your manual btoa/atob and saveInterval logic.
+    const indexeddbProvider = new IndexeddbPersistence("wireboard-stage-data", doc);
 
-    const yArray = doc.getArray("canvas-objects");
+    // Y.Map is better for "ID-based" objects like canvas shapes
+    const yShapes = doc.getMap("canvas-shapes");
 
-    // 2. Sync Yjs changes to React State
     const observer = () => {
-      const data = yArray.toArray();
-      // Filter out any duplicates based on ID
-      const uniqueData = Array.from(new Map(data.map((item: any) => [item.id, item])).values());
-      setObjects(uniqueData);
+      // Convert Y.Map values back to a React-friendly array
+      const data = Array.from(yShapes.values());
+      setObjects(data);
     };
-    yArray.observe(observer);
-    
-    // Initial sync
-    const initialData = yArray.toArray();
-    const uniqueInitial = Array.from(new Map(initialData.map((item: any) => [item.id, item])).values());
-    setObjects(uniqueInitial);
-    setIsInitialized(true);
 
-    // 3. Save to LocalStorage with debounce to avoid write pressure while drawing
-    const saver = () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
+    yShapes.observe(observer);
 
-      saveTimeoutRef.current = setTimeout(() => {
-        if (typeof window !== "undefined") {
-          const stateUpdate = Y.encodeStateAsUpdate(doc);
-          const base64 = btoa(String.fromCharCode(...stateUpdate));
-          localStorage.setItem(STORAGE_KEY, base64);
-        }
-      }, LOCAL_STORAGE_SAVE_INTERVAL);
-    };
-    doc.on("update", saver);
+    indexeddbProvider.on("synced", () => {
+      observer(); // Initial state sync once DB is loaded
+      setIsInitialized(true);
+      console.log("Persistence synced from IndexedDB");
+    });
 
     return () => {
-      yArray.unobserve(observer);
-      doc.off("update", saver);
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
+      yShapes.unobserve(observer);
+      indexeddbProvider.destroy();
     };
   }, [doc, setObjects]);
 
-  // Function to push updates TO Yjs (which then triggers the save)
-  const syncToYjs = (newObjects: any[]) => {
-    const yArray = doc.getArray("canvas-objects");
-    // Filter duplicates before syncing
-    const uniqueObjects = Array.from(new Map(newObjects.map((item: any) => [item.id, item])).values());
-    doc.transact(() => {
-      yArray.delete(0, yArray.length);
-      yArray.push(uniqueObjects);
+  // Optimized: Only update the specific object that changed
+  const updateSingleObject = (id: string, attributes: any) => {
+    const yShapes = doc.getMap("canvas-shapes");
+    const existing = yShapes.get(id) as any;
+    
+    yShapes.set(id, {
+      ...existing,
+      ...attributes,
+      id, // Ensure ID stays consistent
     });
   };
 
-  return { syncToYjs, isInitialized };
+  // Bulk update (used for initial loads or massive changes)
+  const syncToYjs = (newObjects: any[]) => {
+    const yShapes = doc.getMap("canvas-shapes");
+    doc.transact(() => {
+      newObjects.forEach((obj) => {
+        // Only set if it actually changed to save CPU
+        const current = yShapes.get(obj.id);
+        if (JSON.stringify(current) !== JSON.stringify(obj)) {
+          yShapes.set(obj.id, obj);
+        }
+      });
+    });
+  };
+
+  return { syncToYjs, updateSingleObject, isInitialized };
 }

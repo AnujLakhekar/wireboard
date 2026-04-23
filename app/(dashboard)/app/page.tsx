@@ -39,7 +39,6 @@ import {
   LockOpen,
   Layers,
   Layers2,
-  FolderKanban,
   MousePointer2,
   Square,
   Trash2,
@@ -48,8 +47,6 @@ import {
   Pencil,
   Check,
   X,
-  ChevronUp,
-  ChevronDown,
   Eye,
   PaintRoller,
   Ruler,
@@ -61,13 +58,11 @@ import {
   MoveDown,
   ArrowRightFromLine,
   EyeOff,
-  Move,
   Wand2,
   Zap,
   Star as StarIcon,
   Pen,
   Sliders,
-  Menu,
   PanelLeftIcon,
 } from "lucide-react";
 
@@ -90,7 +85,7 @@ import { AutoSaveIndicator } from "@/components/auto-save-indicator";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { Slider } from "@/components/ui/slider";
 import useImage from "use-image";
-import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -296,7 +291,7 @@ const BrushPanel = ({
         <div className="flex flex-wrap items-center gap-2.5">
           <Tabs
             value={drawTool}
-            onValueChange={(value) => onDrawToolChange(value as DrawTool)}
+            onValueChange={(value: string) => onDrawToolChange(value as DrawTool)}
             className="min-w-40"
           >
             <TabsList className="grid h-8 w-full grid-cols-2 rounded-lg border border-zinc-800 bg-zinc-900/80">
@@ -672,12 +667,9 @@ function Canvas({
   const lastPosition = useRef<{ x: number; y: number } | null>(null);
   const drawingOriginRef = useRef({ x: 0, y: 0 });
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
-  const [panelTab, setPanelTab] = useState("layers");
   const [isWorkspacePanelCollapsed, setIsWorkspacePanelCollapsed] = useState(false);
   const [layerRenameId, setLayerRenameId] = useState<string | null>(null);
   const [layerRenameValue, setLayerRenameValue] = useState("");
-  const [pageRenameId, setPageRenameId] = useState<string | null>(null);
-  const [pageRenameValue, setPageRenameValue] = useState("");
   const selectedId = selectedIds[0] ?? null;
 
   const setSelectedId = (id: string | null) => {
@@ -754,15 +746,6 @@ function Canvas({
     updateObj(layerRenameId, { name });
     setLayerRenameId(null);
     setLayerRenameValue("");
-  };
-
-  const commitPageRename = () => {
-    if (!pageRenameId) return;
-    const name = pageRenameValue.trim();
-    if (!name) return;
-    renameDrawing(pageRenameId, name);
-    setPageRenameId(null);
-    setPageRenameValue("");
   };
 
   useEffect(() => {
@@ -1943,17 +1926,17 @@ function Canvas({
         </Stage>
       </ContextMenuTrigger>
 
-      <Card className={`absolute right-4 top-16 z-40 border-zinc-800 bg-zinc-950/90 text-zinc-100 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl transition-all duration-200 ${isWorkspacePanelCollapsed ? "w-14" : "w-[20rem]"}`}>
+      <Card className={`absolute right-4 top-20 z-40 border-zinc-800 bg-zinc-950/90 text-zinc-100 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl transition-all duration-200 ${isWorkspacePanelCollapsed ? "w-10" : "w-[20rem]"}`}>
         <CardHeader className="space-y-1 pb-2">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <Layers2 className="h-4 w-4" />
-                {!isWorkspacePanelCollapsed && "Workspace"}
+                
+                {!isWorkspacePanelCollapsed && "Layers"}
               </CardTitle>
               {!isWorkspacePanelCollapsed && (
                 <CardDescription className="text-xs text-zinc-400">
-                  Manage pages, layers, grouping, and order.
+                  Manage layers, grouping, and order.
                 </CardDescription>
               )}
             </div>
@@ -1970,253 +1953,134 @@ function Canvas({
           </div>
         </CardHeader>
         {!isWorkspacePanelCollapsed && <CardContent className="pt-0">
-          <Tabs value={panelTab} onValueChange={setPanelTab}>
-            <TabsList className="grid h-8 w-full grid-cols-2 rounded-lg border border-zinc-800 bg-zinc-900/70">
-              <TabsTrigger value="pages" className="text-xs">
-                <FolderKanban className="mr-1.5 h-3.5 w-3.5" /> Pages
-              </TabsTrigger>
-              <TabsTrigger value="layers" className="text-xs">
-                <Layers className="mr-1.5 h-3.5 w-3.5" /> Layers
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="pages" className="mt-3 space-y-2">
+          <div className="space-y-2">
+            <div className="flex items-center gap-1">
               <Button
                 size="sm"
-                className="h-8 w-full justify-start text-xs"
-                onClick={() => {
-                  const nextIndex = drawings.length + 1;
-                  const createdId = createDrawing(`Page ${nextIndex}`);
-                  setCurrentDrawingId(createdId);
-                }}
+                variant="secondary"
+                className="h-8 text-xs"
+                onClick={groupSelection}
+                disabled={selectedIds.length < 2}
               >
-                <Plus className="mr-1.5 h-3.5 w-3.5" /> New Page
+                <Group className="mr-1.5 h-3.5 w-3.5" /> Group
               </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-8 text-xs"
+                onClick={ungroupSelection}
+                disabled={selectedIds.length === 0}
+              >
+                <Ungroup className="mr-1.5 h-3.5 w-3.5" /> Ungroup
+              </Button>
+            </div>
 
-              <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
-                {drawings.map((drawing) => {
-                  const isActive = drawing.id === currentDrawingId;
-                  const isEditing = pageRenameId === drawing.id;
+            <Separator className="bg-zinc-800" />
 
-                  return (
-                    <div
-                      key={drawing.id}
-                      className={`rounded-lg border px-2 py-1.5 ${isActive ? "border-cyan-400/50 bg-cyan-500/10" : "border-zinc-800 bg-zinc-900/60"}`}
-                    >
-                      {isEditing ? (
-                        <div className="flex items-center gap-1">
-                          <Input
-                            value={pageRenameValue}
-                            onChange={(e) => setPageRenameValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitPageRename();
-                              if (e.key === "Escape") {
-                                setPageRenameId(null);
-                                setPageRenameValue("");
-                              }
-                            }}
-                            className="h-7 border-zinc-700 bg-zinc-950 text-xs"
-                            autoFocus
-                          />
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={commitPageRename}>
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              setPageRenameId(null);
-                              setPageRenameValue("");
-                            }}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            className="min-w-0 flex-1 truncate text-left text-xs font-medium"
-                            onClick={() => setCurrentDrawingId(drawing.id)}
-                          >
-                            {drawing.name}
-                          </button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              setPageRenameId(drawing.id);
-                              setPageRenameValue(drawing.name || "");
-                            }}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 text-red-300 hover:text-red-200"
-                            disabled={drawings.length <= 1}
-                            onClick={() => deleteDrawing(drawing.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </TabsContent>
+            <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+              {layersTopFirst.length === 0 && (
+                <div className="rounded-md border border-dashed border-zinc-800 px-2 py-3 text-center text-xs text-zinc-500">
+                  No layers yet in this canvas.
+                </div>
+              )}
 
-            <TabsContent value="layers" className="mt-3 space-y-2">
-              <div className="grid grid-cols-2 gap-1">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 text-xs"
-                  onClick={() => moveSelectionLayer("forward")}
-                  disabled={selectedIds.length === 0}
-                >
-                  <ChevronUp className="mr-1.5 h-3.5 w-3.5" /> Forward
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 text-xs"
-                  onClick={() => moveSelectionLayer("backward")}
-                  disabled={selectedIds.length === 0}
-                >
-                  <ChevronDown className="mr-1.5 h-3.5 w-3.5" /> Backward
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 text-xs"
-                  onClick={groupSelection}
-                  disabled={selectedIds.length < 2}
-                >
-                  <Group className="mr-1.5 h-3.5 w-3.5" /> Group
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-8 text-xs"
-                  onClick={ungroupSelection}
-                  disabled={selectedIds.length === 0}
-                >
-                  <Ungroup className="mr-1.5 h-3.5 w-3.5" /> Ungroup
-                </Button>
-              </div>
+              {layersTopFirst.map(({ obj, index }) => {
+                const isSelected = selectedIds.includes(obj.id);
+                const isEditing = layerRenameId === obj.id;
+                const defaultName = `${obj.type?.[0]?.toUpperCase() || "L"}${obj.type?.slice(1) || "ayer"} ${objects.length - index}`;
+                const layerName = obj.name || defaultName;
 
-              <Separator className="bg-zinc-800" />
-
-              <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
-                {layersTopFirst.length === 0 && (
-                  <div className="rounded-md border border-dashed border-zinc-800 px-2 py-3 text-center text-xs text-zinc-500">
-                    No layers yet in {currentDrawing?.name || "this page"}.
-                  </div>
-                )}
-
-                {layersTopFirst.map(({ obj, index }) => {
-                  const isSelected = selectedIds.includes(obj.id);
-                  const isEditing = layerRenameId === obj.id;
-                  const defaultName = `${obj.type?.[0]?.toUpperCase() || "L"}${obj.type?.slice(1) || "ayer"} ${objects.length - index}`;
-                  const layerName = obj.name || defaultName;
-
-                  return (
-                    <div
-                      key={obj.id}
-                      className={`rounded-lg border px-2 py-1.5 ${isSelected ? "border-cyan-400/50 bg-cyan-500/10" : "border-zinc-800 bg-zinc-900/60"}`}
-                    >
-                      {isEditing ? (
-                        <div className="flex items-center gap-1">
-                          <Input
-                            value={layerRenameValue}
-                            onChange={(e) => setLayerRenameValue(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitLayerRename();
-                              if (e.key === "Escape") {
-                                setLayerRenameId(null);
-                                setLayerRenameValue("");
-                              }
-                            }}
-                            className="h-7 border-zinc-700 bg-zinc-950 text-xs"
-                            autoFocus
-                          />
-                          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={commitLayerRename}>
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={() => {
+                return (
+                  <div
+                    key={obj.id}
+                    className={`rounded-lg border px-2 py-1.5 ${isSelected ? "border-cyan-400/50 bg-cyan-500/10" : "border-zinc-800 bg-zinc-900/60"}`}
+                  >
+                    {isEditing ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={layerRenameValue}
+                          onChange={(e) => setLayerRenameValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") commitLayerRename();
+                            if (e.key === "Escape") {
                               setLayerRenameId(null);
                               setLayerRenameValue("");
-                            }}
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            className="min-w-0 flex-1 truncate text-left text-xs"
-                            onClick={(e) =>
-                              handleSelectObject(
-                                obj.id,
-                                Boolean(e.shiftKey || e.ctrlKey || e.metaKey),
-                              )
                             }
-                          >
-                            {layerName}
-                          </button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={() => toggleLayerVisibility(obj.id)}
-                          >
-                            {obj.visible === false ? (
-                              <EyeOff className="h-3.5 w-3.5" />
-                            ) : (
-                              <Eye className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={() => toggleLayerLock(obj.id)}
-                          >
-                            {obj.draggable === false ? (
-                              <Lock className="h-3.5 w-3.5" />
-                            ) : (
-                              <LockOpen className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              setLayerRenameId(obj.id);
-                              setLayerRenameValue(layerName);
-                            }}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </TabsContent>
-          </Tabs>
+                          }}
+                          className="h-7 border-zinc-700 bg-zinc-950 text-xs"
+                          autoFocus
+                        />
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={commitLayerRename}>
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            setLayerRenameId(null);
+                            setLayerRenameValue("");
+                          }}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 truncate text-left text-xs"
+                          onClick={(e) =>
+                            handleSelectObject(
+                              obj.id,
+                              Boolean(e.shiftKey || e.ctrlKey || e.metaKey),
+                            )
+                          }
+                        >
+                          {layerName}
+                        </button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => toggleLayerVisibility(obj.id)}
+                        >
+                          {obj.visible === false ? (
+                            <EyeOff className="h-3.5 w-3.5" />
+                          ) : (
+                            <Eye className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => toggleLayerLock(obj.id)}
+                        >
+                          {obj.draggable === false ? (
+                            <Lock className="h-3.5 w-3.5" />
+                          ) : (
+                            <LockOpen className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => {
+                            setLayerRenameId(obj.id);
+                            setLayerRenameValue(layerName);
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </CardContent>}
       </Card>
 
@@ -2593,8 +2457,6 @@ const CanvasBoard = () => {
     updateCurrentDrawing(objects);
   };
 
-  const { toggleSidebar, state } = useSidebar();
-
   return (
     <>
       <div className="relative w-full h-full overflow-hidden bg-background">
@@ -2654,37 +2516,38 @@ const CanvasBoard = () => {
           }}
         />
 
-        <div className="">
-          <div className="fixed cursor-pointer top-4  translate-x-1/2 bg-background p-2 rounded-sm shadow-2xl border border-border flex items-center gap-2 z-60">
-            <PanelLeftIcon size={20} onClick={() => toggleSidebar()} />
-          </div>
-        </div>
-
-        <div className="fixed top-4 right-4 bg-background px-3 py-2 rounded border border-border z-50 shadow-sm flex items-center gap-3">
-          {/* Editing label */}
-          {currentDrawingId && (
-            <div className="flex items-center gap-2 pr-3 border-r border-border">
-              <p className="text-sm font-semibold text-sidebar-foreground max-w-37.5 truncate">
-                {drawings.find((d) => d.id === currentDrawingId)?.name ||
-                  "Untitled"}
+        <div className="fixed right-4 top-4 z-50 flex items-center gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 shadow-[0_18px_48px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+          <div className="flex min-w-0 items-center gap-3 pr-3 border-r border-zinc-800/80">
+            <div className="grid size-9 place-items-center rounded-xl bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-400/20">
+              <Layers2 className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-zinc-100">
+                {drawings.find((d) => d.id === currentDrawingId)?.name || "Untitled canvas"}
               </p>
             </div>
-          )}
-          {/* Lock button */}
-          <button
-            onClick={() =>
-              setCanvasBoard((prev: any) => ({
-                ...prev,
-                scaleLock: !prev.scaleLock,
-              }))
-            }
-          >
-            {(useCanvasState() as any)?.CanvasBoard?.scaleLock ? (
-              <Lock className="w-4 h-4 text-blue-500" />
-            ) : (
-              <LockOpen className="w-4 h-4" />
-            )}
-          </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <SidebarTrigger className="size-9 rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-200 shadow-none hover:bg-zinc-800" />
+            <button
+              type="button"
+              onClick={() =>
+                setCanvasBoard((prev: any) => ({
+                  ...prev,
+                  scaleLock: !prev.scaleLock,
+                }))
+              }
+              className="grid size-9 place-items-center rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-200 transition-colors hover:bg-zinc-800"
+              aria-label="Toggle canvas lock"
+            >
+              {(useCanvasState() as any)?.CanvasBoard?.scaleLock ? (
+                <Lock className="h-4 w-4 text-cyan-400" />
+              ) : (
+                <LockOpen className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </div>
         <AutoSaveIndicator />
       </div>

@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import * as Y from "yjs";
+import { IndexeddbPersistence } from "y-indexeddb";
 
 export interface Drawing {
   id: string;
@@ -10,118 +11,64 @@ export interface Drawing {
   thumbnail?: string;
 }
 
-const DRAWINGS_STORAGE_KEY = "wireboard-drawings";
-const DRAWINGS_BACKUP_KEY = "wireboard-drawings-backup";
-const AUTO_SAVE_INTERVAL = 5000; // Auto-save every 5 seconds as backup
-
 export function useDrawingsManager() {
   const [doc] = useState(() => new Y.Doc());
   const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
+  const [isSynced, setIsSynced] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [lastSaveTime, setLastSaveTime] = useState<number>(Date.now());
-  const drawingsRef = useRef<Drawing[]>([]);
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Initialize from localStorage
-  useEffect(() => {
-    const savedState = localStorage.getItem(DRAWINGS_STORAGE_KEY);
-    if (savedState) {
-      try {
-        const uint8array = Uint8Array.from(atob(savedState), (c) => c.charCodeAt(0));
-        Y.applyUpdate(doc, uint8array);
-      } catch (e) {
-        console.error("Failed to load drawings:", e);
-        // Try to restore from backup if main fails
-        const backupState = localStorage.getItem(DRAWINGS_BACKUP_KEY);
-        if (backupState) {
-          try {
-            const uint8array = Uint8Array.from(atob(backupState), (c) => c.charCodeAt(0));
-            Y.applyUpdate(doc, uint8array);
-            console.warn("Restored from backup");
-            setSaveStatus('saved');
-          } catch (e2) {
-            console.error("Backup restore failed:", e2);
-            setSaveStatus('error');
-          }
-        }
-      }
+  const markSaving = useCallback(() => {
+    if (saveStatusTimerRef.current) {
+      clearTimeout(saveStatusTimerRef.current);
     }
 
-    const yArray = doc.getArray("drawings");
+    setSaveStatus('saving');
+    setLastSaveTime(Date.now());
+    saveStatusTimerRef.current = setTimeout(() => {
+      setSaveStatus('saved');
+    }, 250);
+  }, []);
 
-    // Sync from Yjs to React state - use ref to avoid circular updates
+  useEffect(() => {
+    // 1. Connect to IndexedDB (handles auto-save and persistence automatically)
+    const provider = new IndexeddbPersistence("wireboard-app-db", doc);
+    const yDrawingsMap = doc.getMap<Drawing>("drawings-map");
+
+    // 2. Observer: Updates React state whenever Yjs data changes
     const observer = () => {
-      const newDrawings = yArray.toArray() as Drawing[];
-      drawingsRef.current = newDrawings;
-      setDrawings(newDrawings);
+      // Convert Map values to Array for the UI list, sorted by date
+      const drawingsArray = Array.from(yDrawingsMap.values()).sort(
+        (a, b) => b.updatedAt - a.updatedAt
+      );
+      setDrawings(drawingsArray);
     };
-    yArray.observe(observer);
-    
-    // Initial sync
-    const initialDrawings = yArray.toArray() as Drawing[];
-    drawingsRef.current = initialDrawings;
-    setDrawings(initialDrawings);
 
-    // Save to localStorage on changes with status tracking
-    const saver = () => {
-      setSaveStatus('saving');
-      
-      // Clear any pending save timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
+    yDrawingsMap.observe(observer);
 
-      saveTimeoutRef.current = setTimeout(() => {
-        try {
-          const stateUpdate = Y.encodeStateAsUpdate(doc);
-          const base64 = btoa(String.fromCharCode(...stateUpdate));
-          localStorage.setItem(DRAWINGS_STORAGE_KEY, base64);
-          
-          // Also save backup
-          const backupState = Y.encodeStateAsUpdate(doc);
-          const backupBase64 = btoa(String.fromCharCode(...backupState));
-          localStorage.setItem(DRAWINGS_BACKUP_KEY, backupBase64);
-          
-          setLastSaveTime(Date.now());
-          setSaveStatus('saved');
-          
-          // Reset status after 2 seconds
-          setTimeout(() => setSaveStatus('idle'), 2000);
-        } catch (error) {
-          console.error("Save failed:", error);
-          setSaveStatus('error');
-        }
-      }, 300); // Immediate save with small debounce
-    };
-    
-    doc.on("update", saver);
-
-    // Periodic backup every 5 seconds
-    const backupInterval = setInterval(() => {
-      try {
-        const stateUpdate = Y.encodeStateAsUpdate(doc);
-        const backupBase64 = btoa(String.fromCharCode(...stateUpdate));
-        localStorage.setItem(DRAWINGS_BACKUP_KEY, backupBase64);
-      } catch (error) {
-        console.error("Backup failed:", error);
-      }
-    }, AUTO_SAVE_INTERVAL);
+    provider.on("synced", () => {
+      observer(); // Initial sync
+      setIsSynced(true);
+      setSaveStatus('saved');
+      setLastSaveTime(Date.now());
+    });
 
     return () => {
-      yArray.unobserve(observer);
-      doc.off("update", saver);
-      clearInterval(backupInterval);
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+      yDrawingsMap.unobserve(observer);
+      provider.destroy();
+      if (saveStatusTimerRef.current) {
+        clearTimeout(saveStatusTimerRef.current);
       }
     };
   }, [doc]);
 
   // Create a new drawing
-  const createDrawing = (name: string): string => {
-    const id = `drawing-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const drawing: Drawing = {
+  const createDrawing = useCallback((name: string): string => {
+    markSaving();
+    const id = crypto.randomUUID();
+    const newDrawing: Drawing = {
       id,
       name,
       objects: [],
@@ -129,85 +76,45 @@ export function useDrawingsManager() {
       updatedAt: Date.now(),
     };
 
-    const yArray = doc.getArray("drawings");
-    doc.transact(() => {
-      yArray.push([drawing]);
-    });
-
+    doc.getMap("drawings-map").set(id, newDrawing);
     setCurrentDrawingId(id);
     return id;
-  };
+  }, [doc, markSaving]);
 
-  // Update current drawing - prevent re-triggering observer
-  const updateCurrentDrawing = (objects: any[]) => {
+  // Update current drawing (Optimized: No delete/insert dance)
+  const updateCurrentDrawing = useCallback((objects: any[]) => {
     if (!currentDrawingId) return;
+    markSaving();
 
-    const uniqueObjects = objects.map((obj, idx) => ({
-      ...obj,
-      id: obj.id || `obj-${idx}`,
-    }));
+    const yDrawingsMap = doc.getMap("drawings-map");
+    const existing = yDrawingsMap.get(currentDrawingId);
 
-    const yArray = doc.getArray("drawings");
-    doc.transact(() => {
-      const idx = drawingsRef.current.findIndex((d) => d.id === currentDrawingId);
-      if (idx !== -1) {
-        const drawing = drawingsRef.current[idx];
-        const updated: Drawing = {
-          ...drawing,
-          objects: uniqueObjects,
+    if (existing) {
+      // transacting ensures this is treated as one single atomic update
+      doc.transact(() => {
+        yDrawingsMap.set(currentDrawingId, {
+          ...existing,
+          objects,
           updatedAt: Date.now(),
-        };
-        yArray.delete(idx, 1);
-        yArray.insert(idx, [updated]);
-      }
-    });
-  };
-
-  // Load a drawing
-  const loadDrawing = (id: string): any[] => {
-    const drawing = drawings.find((d) => d.id === id);
-    setCurrentDrawingId(id);
-    return drawing?.objects || [];
-  };
-
-  // Delete a drawing
-  const deleteDrawing = (id: string) => {
-    const yArray = doc.getArray("drawings");
-    doc.transact(() => {
-      const idx = drawingsRef.current.findIndex((d) => d.id === id);
-      if (idx !== -1) {
-        yArray.delete(idx, 1);
-      }
-    });
-
-    if (currentDrawingId === id) {
-      setCurrentDrawingId(null);
+        });
+      });
     }
-  };
+  }, [currentDrawingId, doc, markSaving]);
 
-  // Rename a drawing
-  const renameDrawing = (id: string, newName: string) => {
-    const yArray = doc.getArray("drawings");
-    doc.transact(() => {
-      const idx = drawingsRef.current.findIndex((d) => d.id === id);
-      if (idx !== -1) {
-        const drawing = drawingsRef.current[idx];
-        const updated: Drawing = {
-          ...drawing,
-          name: newName,
-          updatedAt: Date.now(),
-        };
-        yArray.delete(idx, 1);
-        yArray.insert(idx, [updated]);
-      }
-    });
-  };
+  const deleteDrawing = useCallback((id: string) => {
+    markSaving();
+    doc.getMap("drawings-map").delete(id);
+    if (currentDrawingId === id) setCurrentDrawingId(null);
+  }, [currentDrawingId, doc, markSaving]);
 
-  // Get current drawing objects
-  const getCurrentDrawingObjects = (): any[] => {
-    const drawing = drawings.find((d) => d.id === currentDrawingId);
-    return drawing?.objects || [];
-  };
+  const renameDrawing = useCallback((id: string, newName: string) => {
+    markSaving();
+    const yDrawingsMap = doc.getMap("drawings-map");
+    const existing = yDrawingsMap.get(id);
+    if (existing) {
+      yDrawingsMap.set(id, { ...existing, name: newName, updatedAt: Date.now() });
+    }
+  }, [doc, markSaving]);
 
   return {
     drawings,
@@ -215,11 +122,12 @@ export function useDrawingsManager() {
     setCurrentDrawingId,
     createDrawing,
     updateCurrentDrawing,
-    loadDrawing,
-    getCurrentDrawingObjects,
     deleteDrawing,
     renameDrawing,
+    isSynced,
     saveStatus,
     lastSaveTime,
+    // Helper to get the actual drawing object
+    currentDrawing: drawings.find(d => d.id === currentDrawingId) || null
   };
 }
