@@ -43,7 +43,9 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { DrawingsList } from "@/components/drawings-list";
-import { AutoSaveInfo } from "@/components/auto-save-info";
+import { useCanvasStore } from "@/store/useCanvasStore";
+import { useDrawings } from "@/providers/DrawingsProvider";
+import { Button } from "./ui/button";
 
 type ThemeMode = "light" | "dark" | "system";
 const THEME_STORAGE_KEY = "wireboard-theme";
@@ -103,9 +105,18 @@ export function AppSidebar() {
     return (localStorage.getItem(THEME_STORAGE_KEY) as ThemeMode) ?? "system";
   });
 
+  const { currentCanvasBackground, setCurrentCanvasBackground } =
+    useCanvasStore();
+
   useEffect(() => {
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
     applyTheme(themeMode);
+
+    if (themeMode == "dark") {
+      setCurrentCanvasBackground("#000");
+    } else {
+      setCurrentCanvasBackground("#fefefe");
+    }
 
     if (themeMode !== "system") return;
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -116,6 +127,16 @@ export function AppSidebar() {
 
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
+
+  const { currentDrawingId, drawings } = useDrawings();
+  const [drawId, setDrawId] = useState(null);
+
+  useEffect(() => {
+    const usub = () => {
+      const drawingFound = drawings.find((d) => d.id === currentDrawingId);
+      setDrawId(drawingFound?.name);
+    };
+  }, [currentDrawingId, setDrawId]);
 
   return (
     <Sidebar
@@ -128,7 +149,7 @@ export function AppSidebar() {
           <div className="flex items-center gap-3">
             <div className="size-6 rounded bg-linear-to-br from-cyan-400 to-emerald-400 shadow-lg shadow-emerald-500/20" />
             <span className="text-sm font-semibold text-sidebar-foreground">
-              Wireboard
+              Wireboard {drawId}
             </span>
           </div>
           <button className="rounded p-1 transition-colors hover:bg-sidebar-accent">
@@ -179,25 +200,10 @@ export function AppSidebar() {
         {/* SECTION 2: DRAWINGS */}
         <SidebarGroup className="mt-4">
           <SidebarGroupLabel className="px-2 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/60">
-            My Drawings
+            <h1>Drawings</h1>
           </SidebarGroupLabel>
-          <div className="px-2">
+          <div className="p-2">
             <DrawingsList />
-          </div>
-        </SidebarGroup>
-
-        {/* SECTION 3: FAVORITES (Matching reference image) */}
-        <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="flex cursor-default items-center gap-1 px-2 text-[11px] font-bold uppercase tracking-widest text-sidebar-foreground/60">
-            Favorites <ChevronRight className="size-3 rotate-90" />
-          </SidebarGroupLabel>
-          <div className="flex flex-col items-center justify-center py-8 opacity-40">
-            <div className="mb-3 flex size-10 items-center justify-center rounded-full border border-dashed border-sidebar-border">
-              <Star className="size-4 text-sidebar-foreground/60" />
-            </div>
-            <p className="text-[12px] font-medium text-sidebar-foreground/60">
-              No favorites
-            </p>
           </div>
         </SidebarGroup>
       </SidebarContent>

@@ -49,10 +49,10 @@ export function AutoSaveIndicator() {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-2xl border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 text-zinc-100 shadow-[0_16px_44px_rgba(0,0,0,0.35)] backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2">
-      {saveStatus === "saving" && <Loader2 className="h-4 w-4 animate-spin text-cyan-400" />}
-      {saveStatus === "saved" && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
-      {saveStatus === "error" && <AlertCircle className="h-4 w-4 text-red-400" />}
+    <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 rounded-2xl border border-muted/80 bg-background/90 px-3 py-2 text-foreground animate-in fade-in slide-in-from-bottom-2">
+      {saveStatus === "saving" && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+      {saveStatus === "saved" && <CheckCircle2 className="h-4 w-4 text-accent" />}
+      {saveStatus === "error" && <AlertCircle className="h-4 w-4 text-destructive" />}
       <div className="leading-tight">
     
         <div className="text-xs text-zinc-200">

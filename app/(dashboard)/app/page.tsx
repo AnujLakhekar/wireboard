@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 
+import { useQuery } from "convex/react";
+
 import {
   Stage,
   Layer,
@@ -99,6 +101,10 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Editor from "@monaco-editor/react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import { api } from "@/convex/_generated/api";
+import ProfileMenu from "@/components/ProfileMenu";
 
 const spriteCodeBlockSample = `function SpriteBehavior(sprite, frame, time) {
   const radius = 100;
@@ -133,8 +139,8 @@ type DrawTool = "brush" | "eraser";
 
 const CANVAS_BACKGROUND_PRESETS = [
   { label: "White", value: "#ffffff" },
-  { label: "Soft", value: "#f8fafc" },
-  { label: "Muted", value: "#f1f5f9" },
+  { label: "blue", value: "blue" },
+  { label: "green", value: "lightgreen" },
   { label: "Paper", value: "#fafaf9" },
   { label: "Slate", value: "#e2e8f0" },
   { label: "Dark", value: "#18181b" },
@@ -184,13 +190,13 @@ const Controller = ({
       ref={dropdownRef}
       className="fixed bottom-4 left-1/2 z-60 w-[min(70vw,26rem)] -translate-x-1/2"
     >
-      <Card className="overflow-visible rounded-2xl border border-zinc-800/70 bg-zinc-950/90 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <Card className="overflow-visible rounded-2xl border border-muted/70 bg-background backdrop-blur-xl">
         <CardContent className="p-0">
           <div className="flex items-center justify-center gap-2">
             <button
               type="button"
               onClick={() => onSelectTool("select")}
-              className={`grid size-10 place-items-center rounded-xl border transition-all ${activeTool === "select" ? "border-cyan-300/70 bg-cyan-500 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : "border-zinc-700/70 bg-zinc-900 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"}`}
+              className={`grid size-10 place-items-center rounded-xl border transition-all ${activeTool === "select" ? "border-destructive/70 bg-destructive text-white shadow-[0_0_0_1px_rgba(255,255,255,0.15)]" : "border-zinc-700/70 bg-background text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"}`}
               aria-label="Select"
             >
               <MousePointer2 className="h-4 w-4" />
@@ -204,7 +210,7 @@ const Controller = ({
                 onClick={() =>
                   setOpenDropdown(openDropdown === "shapes" ? null : "shapes")
                 }
-                className="flex h-10 items-center gap-2 rounded-xl border border-zinc-700/70 bg-zinc-900 px-3 text-xs font-medium text-zinc-100 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+                className="flex h-10 items-center gap-2 rounded-xl border border-muted/70 bg-muted px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-muted hover:bg-muted"
                 aria-label="Shapes"
               >
                 <Square className="h-4 w-4" />
@@ -212,7 +218,7 @@ const Controller = ({
               </button>
 
               {openDropdown === "shapes" && (
-                <div className="absolute bottom-full left-0 mb-2 min-w-44 overflow-hidden rounded-xl border border-zinc-700/80 bg-zinc-950 p-1 shadow-[0_16px_40px_rgba(0,0,0,0.55)] animate-in fade-in slide-in-from-bottom-2">
+                <div className="absolute bottom-full left-0 mb-2 min-w-44 overflow-hidden rounded-xl border border-muted/80 bg-muted p-1 shadow-[0_16px_40px_rgba(0,0,0,0.55)] text-muted-foreground animate-in fade-in slide-in-from-bottom-2">
                   {shapeTools.map((opt) => (
                     <button
                       key={opt.id}
@@ -221,7 +227,7 @@ const Controller = ({
                         onAddShape(opt.id);
                         setOpenDropdown(null);
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-zinc-100 transition-colors hover:bg-zinc-800"
+                      className="flex w-full items-center text-muted-foreground gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors hover:bg-card hover:text-foreground"
                     >
                       <opt.icon className="h-4 w-4" />
                       {opt.name}
@@ -234,7 +240,7 @@ const Controller = ({
             <button
               type="button"
               onClick={() => onAddShape("arrow")}
-              className="grid size-10 place-items-center rounded-xl border border-zinc-700/70 bg-zinc-900 text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+              className="flex h-10 items-center gap-2 rounded-xl border border-muted/70 bg-muted px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-zinc-600 hover:bg-muted"
               aria-label="Arrow"
             >
               <ArrowRightFromLine className="h-4 w-4" />
@@ -243,7 +249,7 @@ const Controller = ({
             <button
               type="button"
               onClick={() => onAddShape("star")}
-              className="grid size-10 place-items-center rounded-xl border border-zinc-700/70 bg-zinc-900 text-zinc-300 transition-colors hover:border-zinc-600 hover:bg-zinc-800"
+              className="flex h-10 items-center gap-2 rounded-xl border border-muted/70 bg-muted px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-zinc-600 hover:bg-muted"
               aria-label="Star"
             >
               <StarIcon className="h-4 w-4" />
@@ -254,7 +260,7 @@ const Controller = ({
             <button
               type="button"
               onClick={() => onSelectTool("draw")}
-              className={`grid size-10 place-items-center rounded-xl border transition-colors ${activeTool === "draw" ? "border-cyan-300/70 bg-cyan-500 text-white" : "border-zinc-700/70 bg-zinc-900 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800"}`}
+              className={`flex h-10 items-center gap-2 rounded-xl border border-muted/70 px-3 text-xs font-medium text-muted-foreground transition-colors  ${activeTool == "draw" ? "bg-destructive hover:border-zinc-600 hover:bg-destructive" : "bg-muted hover:border-zinc-600 hover:bg-muted"} "} `}
               aria-label="Draw"
             >
               <Pen className="h-4 w-4" />
@@ -307,15 +313,17 @@ const BrushPanel = ({
   ];
 
   return (
-    <Card className="fixed bottom-22 left-1/2 z-70 w-[min(95vw,46rem)] -translate-x-1/2 rounded-2xl border border-zinc-800/70 bg-zinc-950/90 shadow-[0_18px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-      <CardContent className="p-2.5">
+    <Card className="fixed bottom-25 left-1/2 z-70 w-[min(95vw,46rem)] -translate-x-1/2 rounded-2xl border border-muted/70 bg-background/90  backdrop-blur-xl">
+      <CardContent>
         <div className="flex flex-wrap items-center gap-2.5">
           <Tabs
             value={drawTool}
-            onValueChange={(value: string) => onDrawToolChange(value as DrawTool)}
+            onValueChange={(value: string) =>
+              onDrawToolChange(value as DrawTool)
+            }
             className="min-w-40"
           >
-            <TabsList className="grid h-8 w-full grid-cols-2 rounded-lg border border-zinc-800 bg-zinc-900/80">
+            <TabsList className="grid h-8 w-full grid-cols-2 rounded-lg border border-muted bg-background/80">
               <TabsTrigger value="brush">Brush</TabsTrigger>
               <TabsTrigger value="eraser">Eraser</TabsTrigger>
             </TabsList>
@@ -334,8 +342,8 @@ const BrushPanel = ({
             ))}
           </div>
 
-          <div className="ml-auto flex min-w-42 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-2 py-1.5">
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+          <div className="ml-auto flex min-w-42 items-center gap-2 rounded-lg border border-muted bg-background/80 px-2 py-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Size
             </span>
             <Slider
@@ -360,7 +368,7 @@ const BrushPanel = ({
                 key={option}
                 type="button"
                 onClick={() => onStyleChange(option)}
-                className={`rounded-md border px-2.5 py-1 text-[10px] font-medium capitalize transition-colors ${style === option ? "border-zinc-100 bg-zinc-100 text-zinc-900" : "border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"}`}
+                className={`rounded-md border px-2.5 py-1 text-[10px] font-medium capitalize transition-colors ${style === option ? "border-muted-foreground bg-foreground text-background" : "border-muted bg-background text-foreground hover:bg-muted"}`}
               >
                 {option}
               </button>
@@ -525,7 +533,11 @@ const SpriteScriptEditor = ({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as "script" | "guide")} className="flex max-h-[70vh] flex-col overflow-hidden">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setTab(v as "script" | "guide")}
+          className="flex max-h-[70vh] flex-col overflow-hidden"
+        >
           <TabsList className="shrink-0 w-full justify-start bg-zinc-950 border-b border-zinc-700 rounded-none h-auto p-0">
             <TabsTrigger
               value="script"
@@ -541,7 +553,10 @@ const SpriteScriptEditor = ({
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="script" className="flex flex-1 flex-col gap-4 overflow-hidden p-4 mt-0">
+          <TabsContent
+            value="script"
+            className="flex flex-1 flex-col gap-4 overflow-hidden p-4 mt-0"
+          >
             <div className="flex-1 flex flex-col gap-2 min-h-0">
               <label className="text-xs font-semibold text-zinc-300 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-blue-400"></span>
@@ -586,18 +601,38 @@ const SpriteScriptEditor = ({
             )}
           </TabsContent>
 
-          <TabsContent value="guide" className="flex-1 overflow-y-auto p-4 mt-0">
+          <TabsContent
+            value="guide"
+            className="flex-1 overflow-y-auto p-4 mt-0"
+          >
             <div className="space-y-4 text-sm text-zinc-300">
               <div>
                 <h4 className="font-semibold text-zinc-100 mb-2 flex items-center gap-2">
                   <span className="text-blue-400">▸</span> Sprite API
                 </h4>
                 <div className="bg-zinc-950 border border-zinc-700 rounded-lg p-3 font-mono text-xs space-y-1 text-zinc-400">
-                  <div><span className="text-emerald-400">sprite.move</span>(dx, dy) - Relative movement</div>
-                  <div><span className="text-emerald-400">sprite.moveTo</span>(x, y) - Absolute position</div>
-                  <div><span className="text-emerald-400">sprite.rotate</span>(angle) - Add rotation</div>
-                  <div><span className="text-emerald-400">sprite.setVelocity</span>(vx, vy) - Continuous movement</div>
-                  <div><span className="text-emerald-400">sprite.setAnimation</span>(name) - Change animation</div>
+                  <div>
+                    <span className="text-emerald-400">sprite.move</span>(dx,
+                    dy) - Relative movement
+                  </div>
+                  <div>
+                    <span className="text-emerald-400">sprite.moveTo</span>(x,
+                    y) - Absolute position
+                  </div>
+                  <div>
+                    <span className="text-emerald-400">sprite.rotate</span>
+                    (angle) - Add rotation
+                  </div>
+                  <div>
+                    <span className="text-emerald-400">sprite.setVelocity</span>
+                    (vx, vy) - Continuous movement
+                  </div>
+                  <div>
+                    <span className="text-emerald-400">
+                      sprite.setAnimation
+                    </span>
+                    (name) - Change animation
+                  </div>
                 </div>
               </div>
               <div>
@@ -605,9 +640,18 @@ const SpriteScriptEditor = ({
                   <span className="text-blue-400">▸</span> Available Variables
                 </h4>
                 <div className="bg-zinc-950 border border-zinc-700 rounded-lg p-3 font-mono text-xs space-y-1 text-zinc-400">
-                  <div><span className="text-amber-400">frame</span> - Frame counter (~60fps)</div>
-                  <div><span className="text-amber-400">time</span> - Elapsed ms since script start</div>
-                  <div><span className="text-amber-400">sprite</span> - Current sprite object</div>
+                  <div>
+                    <span className="text-amber-400">frame</span> - Frame
+                    counter (~60fps)
+                  </div>
+                  <div>
+                    <span className="text-amber-400">time</span> - Elapsed ms
+                    since script start
+                  </div>
+                  <div>
+                    <span className="text-amber-400">sprite</span> - Current
+                    sprite object
+                  </div>
                 </div>
               </div>
               <div className="overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950">
@@ -639,7 +683,10 @@ const SpriteScriptEditor = ({
                 </div>
               </div>
               <div className="bg-blue-950/30 border border-blue-700/30 rounded-lg p-3">
-                <p className="text-xs text-blue-300">Tip: Use Math functions like Math.sin(), Math.cos(), Math.random() for advanced behavior</p>
+                <p className="text-xs text-blue-300">
+                  Tip: Use Math functions like Math.sin(), Math.cos(),
+                  Math.random() for advanced behavior
+                </p>
               </div>
             </div>
           </TabsContent>
@@ -751,7 +798,9 @@ const SpriteManager = ({
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-zinc-300 mb-2 block">Sprite URL</label>
+            <label className="text-xs font-semibold text-zinc-300 mb-2 block">
+              Sprite URL
+            </label>
             <div className="flex gap-2">
               <Input
                 value={spriteUrl}
@@ -771,7 +820,8 @@ const SpriteManager = ({
 
           <div className="p-3 bg-zinc-950 border border-zinc-700 rounded-lg">
             <p className="text-xs text-zinc-400">
-              <strong>Tip:</strong> Use sprite sheets for animations. Sprites work best with PNG images.
+              <strong>Tip:</strong> Use sprite sheets for animations. Sprites
+              work best with PNG images.
             </p>
           </div>
         </div>
@@ -1012,22 +1062,44 @@ function Canvas({
   const setRedoStack = useCanvasUIStore((state) => state.setRedoStack);
   const cursorPos = useCanvasUIStore((state) => state.cursorPos);
   const setCursorPos = useCanvasUIStore((state) => state.setCursorPos);
-  const isWorkspacePanelCollapsed = useCanvasUIStore((state) => state.isWorkspacePanelCollapsed);
-  const setIsWorkspacePanelCollapsed = useCanvasUIStore((state) => state.setIsWorkspacePanelCollapsed);
+  const isWorkspacePanelCollapsed = useCanvasUIStore(
+    (state) => state.isWorkspacePanelCollapsed,
+  );
+  const setIsWorkspacePanelCollapsed = useCanvasUIStore(
+    (state) => state.setIsWorkspacePanelCollapsed,
+  );
   const layerRenameId = useCanvasUIStore((state) => state.layerRenameId);
   const setLayerRenameId = useCanvasUIStore((state) => state.setLayerRenameId);
   const layerRenameValue = useCanvasUIStore((state) => state.layerRenameValue);
-  const setLayerRenameValue = useCanvasUIStore((state) => state.setLayerRenameValue);
+  const setLayerRenameValue = useCanvasUIStore(
+    (state) => state.setLayerRenameValue,
+  );
   const scriptEditorOpen = useCanvasUIStore((state) => state.scriptEditorOpen);
-  const setScriptEditorOpen = useCanvasUIStore((state) => state.setScriptEditorOpen);
-  const spriteManagerOpen = useCanvasUIStore((state) => state.spriteManagerOpen);
-  const setSpriteManagerOpen = useCanvasUIStore((state) => state.setSpriteManagerOpen);
-  const selectedSpriteForScript = useCanvasUIStore((state) => state.selectedSpriteForScript);
-  const setSelectedSpriteForScript = useCanvasUIStore((state) => state.setSelectedSpriteForScript);
-  const selectedSpriteForManager = useCanvasUIStore((state) => state.selectedSpriteForManager);
-  const setSelectedSpriteForManager = useCanvasUIStore((state) => state.setSelectedSpriteForManager);
+  const setScriptEditorOpen = useCanvasUIStore(
+    (state) => state.setScriptEditorOpen,
+  );
+  const spriteManagerOpen = useCanvasUIStore(
+    (state) => state.spriteManagerOpen,
+  );
+  const setSpriteManagerOpen = useCanvasUIStore(
+    (state) => state.setSpriteManagerOpen,
+  );
+  const selectedSpriteForScript = useCanvasUIStore(
+    (state) => state.selectedSpriteForScript,
+  );
+  const setSelectedSpriteForScript = useCanvasUIStore(
+    (state) => state.setSelectedSpriteForScript,
+  );
+  const selectedSpriteForManager = useCanvasUIStore(
+    (state) => state.selectedSpriteForManager,
+  );
+  const setSelectedSpriteForManager = useCanvasUIStore(
+    (state) => state.setSelectedSpriteForManager,
+  );
   const canvasBackground = useCanvasUIStore((state) => state.canvasBackground);
-  const setCanvasBackground = useCanvasUIStore((state) => state.setCanvasBackground);
+  const setCanvasBackground = useCanvasUIStore(
+    (state) => state.setCanvasBackground,
+  );
 
   // Local state only (non-UI preferences)
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -1052,10 +1124,16 @@ function Canvas({
   const spriteScriptTimersRef = useRef<Map<string, number>>(new Map());
   const spriteStartTimeRef = useRef<Map<string, number>>(new Map());
   const selectedId = selectedIds[0] ?? null;
+  const { currentCanvasBackground, setCurrentCanvasBackground } =
+    useCanvasStore();
 
   const setSelectedId = (id: string | null) => {
     setSelectedIds(id ? [id] : []);
   };
+
+  useEffect(() => {
+    setCanvasBackground(currentCanvasBackground);
+  }, [currentCanvasBackground]);
 
   const handleSelectObject = (id: string, additive = false) => {
     if (!additive) {
@@ -1074,7 +1152,9 @@ function Canvas({
 
     const primary = source.find((o) => o.id === selectedIds[0]);
     if (primary?.groupId) {
-      return source.filter((o) => o.groupId === primary.groupId).map((o) => o.id);
+      return source
+        .filter((o) => o.groupId === primary.groupId)
+        .map((o) => o.id);
     }
 
     return selectedIds;
@@ -1161,7 +1241,7 @@ function Canvas({
 
     const executeFrame = () => {
       const now = Date.now();
-      
+
       objects.forEach((obj) => {
         if (obj.type !== "sprite" || !obj.script) return;
 
@@ -1210,8 +1290,12 @@ function Canvas({
           // Execute user script with sprite API, frame count, and time
           const frame = Math.floor(elapsed / 16.67); // ~60fps reference
           const time = elapsed;
-          
-          new Function("sprite", "frame", "time", obj.script)(spriteAPI, frame, time);
+
+          new Function("sprite", "frame", "time", obj.script)(
+            spriteAPI,
+            frame,
+            time,
+          );
 
           // Apply velocity if present
           if (obj.velocityX || obj.velocityY) {
@@ -1423,7 +1507,8 @@ function Canvas({
   const layersTopFirst = [...objects]
     .map((obj, index) => ({ obj, index }))
     .reverse();
-  const currentDrawing = drawings.find((d) => d.id === currentDrawingId) || null;
+  const currentDrawing =
+    drawings.find((d) => d.id === currentDrawingId) || null;
 
   const openMediaPicker = () => {
     if (!selectedObject || !isSelectedMedia) return;
@@ -1891,7 +1976,9 @@ function Canvas({
 
   const deleteSelection = () => {
     if (selectedIds.length === 0) return;
-    setObjects((prev: any[]) => prev.filter((o) => !selectedIds.includes(o.id)));
+    setObjects((prev: any[]) =>
+      prev.filter((o) => !selectedIds.includes(o.id)),
+    );
     setSelectedIds([]);
   };
 
@@ -1904,7 +1991,9 @@ function Canvas({
   const applyFillToSelection = (fill: string) => {
     if (selectedIds.length === 0) return;
     setObjects((prev: any[]) =>
-      prev.map((obj) => (selectedIds.includes(obj.id) ? { ...obj, fill } : obj)),
+      prev.map((obj) =>
+        selectedIds.includes(obj.id) ? { ...obj, fill } : obj,
+      ),
     );
   };
 
@@ -2003,6 +2092,12 @@ function Canvas({
           onShortcutAddShape("star");
           return;
         }
+
+        if (key === "j") {
+          e.preventDefault();
+          setIsWorkspacePanelCollapsed(!isWorkspacePanelCollapsed);
+        }
+
         if (key === "escape") {
           e.preventDefault();
           setSelectedIds([]);
@@ -2138,7 +2233,9 @@ function Canvas({
           if (isCtrl && selectedIds.length > 0) {
             e.preventDefault();
             saveHistory();
-            const targets = objects.filter((obj: any) => selectedIds.includes(obj.id));
+            const targets = objects.filter((obj: any) =>
+              selectedIds.includes(obj.id),
+            );
             const duplicated = targets.map((target) => ({
               ...target,
               id: `${target.type}-${uuidv4()}`,
@@ -2173,7 +2270,9 @@ function Canvas({
             const step = isCtrl ? 10 : 2;
             setObjects((prev: any[]) =>
               prev.map((obj) =>
-                selectedIds.includes(obj.id) ? { ...obj, x: (obj.x || 0) - step } : obj,
+                selectedIds.includes(obj.id)
+                  ? { ...obj, x: (obj.x || 0) - step }
+                  : obj,
               ),
             );
           }
@@ -2184,7 +2283,9 @@ function Canvas({
             const step = isCtrl ? 10 : 2;
             setObjects((prev: any[]) =>
               prev.map((obj) =>
-                selectedIds.includes(obj.id) ? { ...obj, x: (obj.x || 0) + step } : obj,
+                selectedIds.includes(obj.id)
+                  ? { ...obj, x: (obj.x || 0) + step }
+                  : obj,
               ),
             );
           }
@@ -2195,7 +2296,9 @@ function Canvas({
             const step = isCtrl ? 10 : 2;
             setObjects((prev: any[]) =>
               prev.map((obj) =>
-                selectedIds.includes(obj.id) ? { ...obj, y: (obj.y || 0) - step } : obj,
+                selectedIds.includes(obj.id)
+                  ? { ...obj, y: (obj.y || 0) - step }
+                  : obj,
               ),
             );
           }
@@ -2206,7 +2309,9 @@ function Canvas({
             const step = isCtrl ? 10 : 2;
             setObjects((prev: any[]) =>
               prev.map((obj) =>
-                selectedIds.includes(obj.id) ? { ...obj, y: (obj.y || 0) + step } : obj,
+                selectedIds.includes(obj.id)
+                  ? { ...obj, y: (obj.y || 0) + step }
+                  : obj,
               ),
             );
           }
@@ -2228,6 +2333,21 @@ function Canvas({
     onShortcutToolSelect,
     setCanvasBoard,
   ]);
+
+  useGSAP(() => {
+    gsap.fromTo(
+      ".layer",
+      {
+        opacity: 0,
+        y: -10,
+      },
+      {
+        opacity: 1,
+        y: 0,
+        stagger: 0.5,
+      },
+    );
+  }, [currentDrawingId]);
 
   return (
     <ContextMenu>
@@ -2372,184 +2492,209 @@ function Canvas({
         </Stage>
       </ContextMenuTrigger>
 
-      <Card className={`absolute right-4 top-20 z-40 border-zinc-800 bg-zinc-950/90 text-zinc-100 shadow-[0_24px_70px_rgba(0,0,0,0.5)] backdrop-blur-xl transition-all duration-200 ${isWorkspacePanelCollapsed ? "w-10" : "w-[20rem]"}`}>
+      <Card
+        className={`absolute right-4 top-20 z-40 border border-muted-foreground bg-background text-foreground backdrop-blur-xl transition-all duration-200 ${isWorkspacePanelCollapsed ? "w-10 h-10" : "w-[20rem]"}`}
+      >
         <CardHeader className="space-y-1 pb-2">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                
                 {!isWorkspacePanelCollapsed && "Layers"}
               </CardTitle>
               {!isWorkspacePanelCollapsed && (
-                <CardDescription className="text-xs text-zinc-400">
+                <CardDescription className="text-xs text-foreground">
                   Manage layers, grouping, and order.
                 </CardDescription>
               )}
             </div>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 rounded-full border border-zinc-800 bg-zinc-900/80"
-              onClick={() => setIsWorkspacePanelCollapsed(!isWorkspacePanelCollapsed)}
-              aria-label={isWorkspacePanelCollapsed ? "Expand workspace panel" : "Collapse workspace panel"}
+            <div
+              onClick={() =>
+                setIsWorkspacePanelCollapsed(!isWorkspacePanelCollapsed)
+              }
             >
-              <PanelLeftIcon className={`h-3.5 w-3.5 transition-transform ${isWorkspacePanelCollapsed ? "rotate-180" : ""}`} />
-            </Button>
-          </div>
-        </CardHeader>
-        {!isWorkspacePanelCollapsed && <CardContent className="pt-0">
-          <div className="space-y-2">
-            <div className="flex items-center gap-1">
               <Button
-                size="sm"
-                variant="secondary"
-                className="h-8 text-xs"
-                onClick={groupSelection}
-                disabled={selectedIds.length < 2}
+                type="button"
+                size="icon"
+                variant="ghost"
+                className={
+                  "h-7 w-7 p-1 rounded-full border border-muted bg-background/80 " +
+                  ""
+                }
+                aria-label={
+                  isWorkspacePanelCollapsed
+                    ? "Expand workspace panel"
+                    : "Collapse workspace panel"
+                }
               >
-                <Group className="mr-1.5 h-3.5 w-3.5" /> Group
-              </Button>
-              <Button
-                size="sm"
-                variant="secondary"
-                className="h-8 text-xs"
-                onClick={ungroupSelection}
-                disabled={selectedIds.length === 0}
-              >
-                <Ungroup className="mr-1.5 h-3.5 w-3.5" /> Ungroup
+                <PanelLeftIcon
+                  className={`h-3.5 w-3.5 transition-transform ${isWorkspacePanelCollapsed ? "rotate-180 relative right-[20px] top-[-10px]" : ""}`}
+                />
               </Button>
             </div>
+          </div>
+        </CardHeader>
+        {!isWorkspacePanelCollapsed && (
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 text-xs "
+                  onClick={groupSelection}
+                  disabled={selectedIds.length < 2}
+                >
+                  <Group className="mr-1.5 h-3.5 w-3.5" /> Group
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-8 text-xs"
+                  onClick={ungroupSelection}
+                  disabled={selectedIds.length === 0}
+                >
+                  <Ungroup className="mr-1.5 h-3.5 w-3.5" /> Ungroup
+                </Button>
+              </div>
 
-            <Separator className="bg-zinc-800" />
+              <Separator className="bg-muted" />
 
-            <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
-              {layersTopFirst.length === 0 && (
-                <div className="rounded-md border border-dashed border-zinc-800 px-2 py-3 text-center text-xs text-zinc-500">
-                  No layers yet in this canvas.
-                </div>
-              )}
+              <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+                {layersTopFirst.length === 0 && (
+                  <div className="rounded-md border border-dashed border-muted px-2 py-3 text-center text-xs text-foreground">
+                    No layers yet in this canvas.
+                  </div>
+                )}
 
-              {layersTopFirst.map(({ obj, index }) => {
-                const isSelected = selectedIds.includes(obj.id);
-                const isEditing = layerRenameId === obj.id;
-                const defaultName = `${obj.type?.[0]?.toUpperCase() || "L"}${obj.type?.slice(1) || "ayer"} ${objects.length - index}`;
-                const layerName = obj.name || defaultName;
+                {layersTopFirst.map(({ obj, index }) => {
+                  const isSelected = selectedIds.includes(obj.id);
+                  const isEditing = layerRenameId === obj.id;
+                  const defaultName = `${obj.type?.[0]?.toUpperCase() || "L"}${obj.type?.slice(1) || "ayer"} ${objects.length - index}`;
+                  const layerName = obj.name || defaultName;
 
-                return (
-                  <div
-                    key={obj.id}
-                    className={`rounded-lg border px-2 py-1.5 ${isSelected ? "border-cyan-400/50 bg-cyan-500/10" : "border-zinc-800 bg-zinc-900/60"}`}
-                  >
-                    {isEditing ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          value={layerRenameValue}
-                          onChange={(e) => setLayerRenameValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") commitLayerRename();
-                            if (e.key === "Escape") {
-                              setLayerRenameId(null);
-                              setLayerRenameValue("");
+                  return (
+                    <div
+                      key={obj.id}
+                      className={`layer rounded-lg border px-2 py-1.5 ${isSelected ? "border-destructive/50 bg-destructive/10" : "border-muted bg-background/60"}`}
+                    >
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={layerRenameValue}
+                            onChange={(e) =>
+                              setLayerRenameValue(e.target.value)
                             }
-                          }}
-                          className="h-7 border-zinc-700 bg-zinc-950 text-xs"
-                          autoFocus
-                        />
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={commitLayerRename}>
-                          <Check className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            setLayerRenameId(null);
-                            setLayerRenameValue("");
-                          }}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="min-w-0 flex-1 truncate text-left text-xs"
-                          onClick={(e) =>
-                            handleSelectObject(
-                              obj.id,
-                              Boolean(e.shiftKey || e.ctrlKey || e.metaKey),
-                            )
-                          }
-                        >
-                          {layerName}
-                        </button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => toggleLayerVisibility(obj.id)}
-                        >
-                          {obj.visible === false ? (
-                            <EyeOff className="h-3.5 w-3.5" />
-                          ) : (
-                            <Eye className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => toggleLayerLock(obj.id)}
-                        >
-                          {obj.draggable === false ? (
-                            <Lock className="h-3.5 w-3.5" />
-                          ) : (
-                            <LockOpen className="h-3.5 w-3.5" />
-                          )}
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => {
-                            setLayerRenameId(obj.id);
-                            setLayerRenameValue(layerName);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        {obj.type === "sprite" && (
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitLayerRename();
+                              if (e.key === "Escape") {
+                                setLayerRenameId(null);
+                                setLayerRenameValue("");
+                              }
+                            }}
+                            className="h-7 border-muted bg-background text-xs"
+                            autoFocus
+                          />
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-7 w-7 text-purple-400 hover:bg-purple-500/20"
-                            onClick={() => {
-                              setSelectedSpriteForManager(obj);
-                              setSpriteManagerOpen(true);
-                            }}
-                            title="Change sprite image"
+                            className="h-7 w-7"
+                            onClick={commitLayerRename}
                           >
-                            <Code className="h-3.5 w-3.5" />
+                            <Check className="h-3.5 w-3.5" />
                           </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              setLayerRenameId(null);
+                              setLayerRenameValue("");
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 truncate text-left text-xs"
+                            onClick={(e) =>
+                              handleSelectObject(
+                                obj.id,
+                                Boolean(e.shiftKey || e.ctrlKey || e.metaKey),
+                              )
+                            }
+                          >
+                            {layerName}
+                          </button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => toggleLayerVisibility(obj.id)}
+                          >
+                            {obj.visible === false ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => toggleLayerLock(obj.id)}
+                          >
+                            {obj.draggable === false ? (
+                              <Lock className="h-3.5 w-3.5" />
+                            ) : (
+                              <LockOpen className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            onClick={() => {
+                              setLayerRenameId(obj.id);
+                              setLayerRenameValue(layerName);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          {obj.type === "sprite" && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-purple-400 hover:bg-purple-500/20"
+                              onClick={() => {
+                                setSelectedSpriteForManager(obj);
+                                setSpriteManagerOpen(true);
+                              }}
+                              title="Change sprite image"
+                            >
+                              <Code className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </CardContent>}
+          </CardContent>
+        )}
       </Card>
 
-      <ContextMenuContent className="w-72 rounded-xl border-zinc-800 bg-zinc-950/95 p-1.5 text-zinc-100 backdrop-blur-xl">
+      <ContextMenuContent className="w-72 rounded-xl border-muted bg-background/95 p-1.5 text-foreground ">
         <ContextMenuSub>
           <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
-            <PaintRoller className="mr-2 h-4 w-4" /> Canvas Background
+            <PaintRoller className="mr-2 h-4 w-4" /> Background
           </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="w-44 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
+          <ContextMenuSubContent className="w-44 rounded-xl border-muted bg-background p-1.5 text-foreground">
             {CANVAS_BACKGROUND_PRESETS.map((preset) => (
               <ContextMenuItem
                 key={preset.value}
@@ -2557,7 +2702,7 @@ function Canvas({
                 className="rounded-md px-2 py-1.5 text-xs"
               >
                 <div
-                  className="mr-2 h-4 w-4 rounded-full border border-zinc-700"
+                  className="mr-2 h-4 w-4 rounded-full border border-muted-foreground"
                   style={{ backgroundColor: preset.value }}
                 />
                 {preset.label}
@@ -2571,23 +2716,59 @@ function Canvas({
           <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
             <Plus className="mr-2 h-4 w-4" /> Insert
           </ContextMenuSubTrigger>
-          <ContextMenuSubContent className="w-44 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
-            <ContextMenuItem onClick={() => addCanvasItem("text")} className="rounded-md px-2 py-1.5 text-xs">Add Text</ContextMenuItem>
-            <ContextMenuItem onClick={() => addCanvasItem("wedge")} className="rounded-md px-2 py-1.5 text-xs">Add Wedge</ContextMenuItem>
-            <ContextMenuItem onClick={() => addCanvasItem("image")} className="rounded-md px-2 py-1.5 text-xs">Add Image</ContextMenuItem>
-            <ContextMenuItem onClick={addImageFromUrl} className="rounded-md px-2 py-1.5 text-xs">Add Image From URL</ContextMenuItem>
-            <ContextMenuItem onClick={openImageUploadPicker} className="rounded-md px-2 py-1.5 text-xs">Upload Image</ContextMenuItem>
-            <ContextMenuItem onClick={() => addCanvasItem("sprite")} className="rounded-md px-2 py-1.5 text-xs">Add Sprite</ContextMenuItem>
+          <ContextMenuSubContent className="w-44 rounded-xl border-muted bg-background p-1.5 text-foreground">
+            <ContextMenuItem
+              onClick={() => addCanvasItem("text")}
+              className="rounded-md px-2 py-1.5 text-xs"
+            >
+              Add Text
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() => addCanvasItem("wedge")}
+              className="rounded-md px-2 py-1.5 text-xs"
+            >
+              Add Wedge
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() => addCanvasItem("image")}
+              className="rounded-md px-2 py-1.5 text-xs"
+            >
+              Add Image
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={addImageFromUrl}
+              className="rounded-md px-2 py-1.5 text-xs"
+            >
+              Add Image From URL
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={openImageUploadPicker}
+              className="rounded-md px-2 py-1.5 text-xs"
+            >
+              Upload Image
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={() => addCanvasItem("sprite")}
+              className="rounded-md px-2 py-1.5 text-xs"
+            >
+              Add Sprite
+            </ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
 
         {selectedIds.length > 0 ? (
           <>
             <ContextMenuSeparator />
-            <ContextMenuItem onClick={copySelectionToClipboard} className="rounded-md px-2 py-1.5 text-xs">
+            <ContextMenuItem
+              onClick={copySelectionToClipboard}
+              className="rounded-md px-2 py-1.5 text-xs"
+            >
               <Copy className="mr-2 h-4 w-4" /> Copy Selection
             </ContextMenuItem>
-            <ContextMenuItem onClick={duplicateSelection} className="rounded-md px-2 py-1.5 text-xs">
+            <ContextMenuItem
+              onClick={duplicateSelection}
+              className="rounded-md px-2 py-1.5 text-xs"
+            >
               <Copy className="mr-2 h-4 w-4" /> Duplicate Selection
             </ContextMenuItem>
             <ContextMenuSub>
@@ -2616,25 +2797,44 @@ function Canvas({
                 <Layers className="mr-2 h-4 w-4" /> Order
               </ContextMenuSubTrigger>
               <ContextMenuSubContent className="w-40 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
-                <ContextMenuItem onClick={() => moveSelectionLayer("front")} className="rounded-md px-2 py-1.5 text-xs">
+                <ContextMenuItem
+                  onClick={() => moveSelectionLayer("front")}
+                  className="rounded-md px-2 py-1.5 text-xs"
+                >
                   <BringToFront className="mr-2 h-4 w-4" /> Bring To Front
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => moveSelectionLayer("forward")} className="rounded-md px-2 py-1.5 text-xs">
+                <ContextMenuItem
+                  onClick={() => moveSelectionLayer("forward")}
+                  className="rounded-md px-2 py-1.5 text-xs"
+                >
                   <MoveUp className="mr-2 h-4 w-4" /> Bring Forward
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => moveSelectionLayer("backward")} className="rounded-md px-2 py-1.5 text-xs">
+                <ContextMenuItem
+                  onClick={() => moveSelectionLayer("backward")}
+                  className="rounded-md px-2 py-1.5 text-xs"
+                >
                   <MoveDown className="mr-2 h-4 w-4" /> Send Backward
                 </ContextMenuItem>
-                <ContextMenuItem onClick={() => moveSelectionLayer("back")} className="rounded-md px-2 py-1.5 text-xs">
+                <ContextMenuItem
+                  onClick={() => moveSelectionLayer("back")}
+                  className="rounded-md px-2 py-1.5 text-xs"
+                >
                   <SendToBack className="mr-2 h-4 w-4" /> Send To Back
                 </ContextMenuItem>
               </ContextMenuSubContent>
             </ContextMenuSub>
 
-            <ContextMenuItem onClick={groupSelection} className="rounded-md px-2 py-1.5 text-xs" disabled={selectedIds.length < 2}>
+            <ContextMenuItem
+              onClick={groupSelection}
+              className="rounded-md px-2 py-1.5 text-xs"
+              disabled={selectedIds.length < 2}
+            >
               <Group className="mr-2 h-4 w-4" /> Group Selection
             </ContextMenuItem>
-            <ContextMenuItem onClick={ungroupSelection} className="rounded-md px-2 py-1.5 text-xs">
+            <ContextMenuItem
+              onClick={ungroupSelection}
+              className="rounded-md px-2 py-1.5 text-xs"
+            >
               <Ungroup className="mr-2 h-4 w-4" /> Ungroup
             </ContextMenuItem>
 
@@ -2663,11 +2863,15 @@ function Canvas({
                     }
                     className="rounded-md px-2 py-1.5 text-xs"
                   >
-                    {selectedObject?.grayscale ? "Remove Grayscale" : "Grayscale"}
+                    {selectedObject?.grayscale
+                      ? "Remove Grayscale"
+                      : "Grayscale"}
                   </ContextMenuItem>
                   <ContextMenuItem
                     onClick={() =>
-                      updateObj(selectedId!, { invert: !selectedObject?.invert })
+                      updateObj(selectedId!, {
+                        invert: !selectedObject?.invert,
+                      })
                     }
                     className="rounded-md px-2 py-1.5 text-xs"
                   >
@@ -2683,141 +2887,220 @@ function Canvas({
                   <Zap className="mr-2 h-4 w-4" /> Animation
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent className="w-40 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
-                  <ContextMenuItem onClick={() => updateObj(selectedId!, { animation: "none" })} className="rounded-md px-2 py-1.5 text-xs">None</ContextMenuItem>
-                  <ContextMenuItem onClick={() => updateObj(selectedId!, { animation: "spin" })} className="rounded-md px-2 py-1.5 text-xs">Spinning</ContextMenuItem>
-                  <ContextMenuItem onClick={() => updateObj(selectedId!, { animation: "pulse" })} className="rounded-md px-2 py-1.5 text-xs">Pulse</ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedId!, { animation: "none" })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    None
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedId!, { animation: "spin" })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Spinning
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedId!, { animation: "pulse" })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Pulse
+                  </ContextMenuItem>
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
 
-            {selectedIds.length === 1 && !!selectedObject && selectedObject.type === "sprite" && (
-              <ContextMenuSub>
-                <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">Sprite</ContextMenuSubTrigger>
-                <ContextMenuSubContent className="w-40 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
-                  <ContextMenuItem
-                    onClick={() => {
-                      setSelectedSpriteForScript(selectedObject);
-                      setScriptEditorOpen(true);
-                    }}
-                    className="rounded-md px-2 py-1.5 text-xs"
-                  >
-                    <Code className="mr-2 h-4 w-4" /> Edit Script
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onClick={() => {
-                      setSelectedSpriteForManager(selectedObject);
-                      setSpriteManagerOpen(true);
-                    }}
-                    className="rounded-md px-2 py-1.5 text-xs"
-                  >
-                    <Pencil className="mr-2 h-4 w-4" /> Change Sprite
-                  </ContextMenuItem>
-                  <ContextMenuSeparator className="bg-zinc-700 my-1" />
-                  <ContextMenuItem
-                    onClick={() => updateObj(selectedObject.id, { animation: "idle" })}
-                    className="rounded-md px-2 py-1.5 text-xs"
-                  >
-                    Set Idle
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onClick={() =>
-                      updateObj(selectedObject.id, {
-                        animation: "punch",
-                        punchNonce: Date.now(),
-                        onAnimationDone: () =>
-                          updateObj(selectedObject.id, { animation: "idle" }),
-                      })
-                    }
-                    className="rounded-md px-2 py-1.5 text-xs"
-                  >
-                    Punch Once
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onClick={() =>
-                      updateObj(selectedObject.id, {
-                        frameRate: (selectedObject.frameRate || 7) + 1,
-                      })
-                    }
-                    className="rounded-md px-2 py-1.5 text-xs"
-                  >
-                    Increase FPS
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onClick={() =>
-                      updateObj(selectedObject.id, {
-                        frameRate: Math.max(1, (selectedObject.frameRate || 7) - 1),
-                      })
-                    }
-                    className="rounded-md px-2 py-1.5 text-xs"
-                  >
-                    Decrease FPS
-                  </ContextMenuItem>
-                </ContextMenuSubContent>
-              </ContextMenuSub>
-            )}
+            {selectedIds.length === 1 &&
+              !!selectedObject &&
+              selectedObject.type === "sprite" && (
+                <ContextMenuSub>
+                  <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
+                    Sprite
+                  </ContextMenuSubTrigger>
+                  <ContextMenuSubContent className="w-40 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
+                    <ContextMenuItem
+                      onClick={() => {
+                        setSelectedSpriteForScript(selectedObject);
+                        setScriptEditorOpen(true);
+                      }}
+                      className="rounded-md px-2 py-1.5 text-xs"
+                    >
+                      <Code className="mr-2 h-4 w-4" /> Edit Script
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() => {
+                        setSelectedSpriteForManager(selectedObject);
+                        setSpriteManagerOpen(true);
+                      }}
+                      className="rounded-md px-2 py-1.5 text-xs"
+                    >
+                      <Pencil className="mr-2 h-4 w-4" /> Change Sprite
+                    </ContextMenuItem>
+                    <ContextMenuSeparator className="bg-zinc-700 my-1" />
+                    <ContextMenuItem
+                      onClick={() =>
+                        updateObj(selectedObject.id, { animation: "idle" })
+                      }
+                      className="rounded-md px-2 py-1.5 text-xs"
+                    >
+                      Set Idle
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() =>
+                        updateObj(selectedObject.id, {
+                          animation: "punch",
+                          punchNonce: Date.now(),
+                          onAnimationDone: () =>
+                            updateObj(selectedObject.id, { animation: "idle" }),
+                        })
+                      }
+                      className="rounded-md px-2 py-1.5 text-xs"
+                    >
+                      Punch Once
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() =>
+                        updateObj(selectedObject.id, {
+                          frameRate: (selectedObject.frameRate || 7) + 1,
+                        })
+                      }
+                      className="rounded-md px-2 py-1.5 text-xs"
+                    >
+                      Increase FPS
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={() =>
+                        updateObj(selectedObject.id, {
+                          frameRate: Math.max(
+                            1,
+                            (selectedObject.frameRate || 7) - 1,
+                          ),
+                        })
+                      }
+                      className="rounded-md px-2 py-1.5 text-xs"
+                    >
+                      Decrease FPS
+                    </ContextMenuItem>
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
+              )}
 
             {selectedIds.length === 1 && isSelectedMedia && (
               <ContextMenuSub>
-                <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">Media</ContextMenuSubTrigger>
+                <ContextMenuSubTrigger className="rounded-md px-2 py-1.5 text-xs">
+                  Media
+                </ContextMenuSubTrigger>
                 <ContextMenuSubContent className="w-44 rounded-xl border-zinc-800 bg-zinc-950 p-1.5 text-zinc-100">
-                  <ContextMenuItem onClick={openMediaPicker} className="rounded-md px-2 py-1.5 text-xs">Load/Replace Image</ContextMenuItem>
-                  <ContextMenuItem onClick={replaceSelectedMediaFromUrl} className="rounded-md px-2 py-1.5 text-xs">Replace From URL</ContextMenuItem>
-                  <ContextMenuItem onClick={() => rotateSelectedMedia(-90)} className="rounded-md px-2 py-1.5 text-xs">Rotate -90°</ContextMenuItem>
-                  <ContextMenuItem onClick={() => rotateSelectedMedia(90)} className="rounded-md px-2 py-1.5 text-xs">Rotate +90°</ContextMenuItem>
-                  <ContextMenuItem onClick={() => flipSelectedMedia("x")} className="rounded-md px-2 py-1.5 text-xs">Flip Horizontal</ContextMenuItem>
-                  <ContextMenuItem onClick={() => flipSelectedMedia("y")} className="rounded-md px-2 py-1.5 text-xs">Flip Vertical</ContextMenuItem>
-                  <ContextMenuItem onClick={resetSelectedMediaTransform} className="rounded-md px-2 py-1.5 text-xs">Reset Transform</ContextMenuItem>
-                  <ContextMenuItem onClick={exportSelectedMediaPng} className="rounded-md px-2 py-1.5 text-xs">Save Selected as PNG</ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={openMediaPicker}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Load/Replace Image
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={replaceSelectedMediaFromUrl}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Replace From URL
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => rotateSelectedMedia(-90)}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Rotate -90°
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => rotateSelectedMedia(90)}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Rotate +90°
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => flipSelectedMedia("x")}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Flip Horizontal
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => flipSelectedMedia("y")}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Flip Vertical
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={resetSelectedMediaTransform}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Reset Transform
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={exportSelectedMediaPng}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Save Selected as PNG
+                  </ContextMenuItem>
                 </ContextMenuSubContent>
               </ContextMenuSub>
             )}
 
-            {selectedIds.length === 1 && !!selectedObject && selectedObject.type === "text" && (
-              <>
-                <ContextMenuItem
-                  onClick={() =>
-                    updateObj(selectedObject.id, {
-                      fontSize: (selectedObject.fontSize || 20) + 2,
-                    })
-                  }
-                  className="rounded-md px-2 py-1.5 text-xs"
-                >
-                  Increase Font
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={() =>
-                    updateObj(selectedObject.id, {
-                      fontSize: Math.max(10, (selectedObject.fontSize || 20) - 2),
-                    })
-                  }
-                  className="rounded-md px-2 py-1.5 text-xs"
-                >
-                  Decrease Font
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={() =>
-                    updateObj(selectedObject.id, {
-                      fontStyle:
-                        selectedObject.fontStyle === "bold" ? "normal" : "bold",
-                    })
-                  }
-                  className="rounded-md px-2 py-1.5 text-xs"
-                >
-                  Toggle Bold
-                </ContextMenuItem>
-                <ContextMenuItem
-                  onClick={() => {
-                    const nextText =
-                      window.prompt("Edit text", selectedObject.text || "") ??
-                      selectedObject.text;
-                    updateObj(selectedObject.id, { text: nextText });
-                  }}
-                  className="rounded-md px-2 py-1.5 text-xs"
-                >
-                  Edit Text
-                </ContextMenuItem>
-              </>
-            )}
+            {selectedIds.length === 1 &&
+              !!selectedObject &&
+              selectedObject.type === "text" && (
+                <>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedObject.id, {
+                        fontSize: (selectedObject.fontSize || 20) + 2,
+                      })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Increase Font
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedObject.id, {
+                        fontSize: Math.max(
+                          10,
+                          (selectedObject.fontSize || 20) - 2,
+                        ),
+                      })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Decrease Font
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() =>
+                      updateObj(selectedObject.id, {
+                        fontStyle:
+                          selectedObject.fontStyle === "bold"
+                            ? "normal"
+                            : "bold",
+                      })
+                    }
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Toggle Bold
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    onClick={() => {
+                      const nextText =
+                        window.prompt("Edit text", selectedObject.text || "") ??
+                        selectedObject.text;
+                      updateObj(selectedObject.id, { text: nextText });
+                    }}
+                    className="rounded-md px-2 py-1.5 text-xs"
+                  >
+                    Edit Text
+                  </ContextMenuItem>
+                </>
+              )}
 
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -2831,7 +3114,10 @@ function Canvas({
         ) : (
           <>
             {groupDraftIds.length >= 2 && (
-              <ContextMenuItem onClick={groupMarkedShapes} className="rounded-md px-2 py-1.5 text-xs">
+              <ContextMenuItem
+                onClick={groupMarkedShapes}
+                className="rounded-md px-2 py-1.5 text-xs"
+              >
                 Create Group ({groupDraftIds.length})
               </ContextMenuItem>
             )}
@@ -2913,6 +3199,7 @@ const CanvasBoard = () => {
   const [drawSize, setDrawSize] = useState(3);
   const [drawStyle, setDrawStyle] = useState<BrushStyle>("solid");
   const { CanvasBoard, setCanvasBoard } = useCanvasState() as any;
+
   const {
     drawings,
     currentDrawingId,
@@ -2964,6 +3251,14 @@ const CanvasBoard = () => {
     if (!currentDrawingId) return;
     updateCurrentDrawing(objects);
   };
+
+  const [IsLockPanelHdden, setLockPanelHideen] = useState(false);
+
+  const user = useQuery(api.users.viewer);
+
+  useEffect(() => {
+    console.log("Current user:", user);
+  }, [user]);
 
   return (
     <>
@@ -3024,38 +3319,39 @@ const CanvasBoard = () => {
           }}
         />
 
-        <div className="fixed right-4 top-4 z-50 flex items-center gap-3 rounded-2xl border border-zinc-800/80 bg-zinc-950/90 px-3 py-2 shadow-[0_18px_48px_rgba(0,0,0,0.35)] backdrop-blur-xl">
-          <div className="flex min-w-0 items-center gap-3 pr-3 border-r border-zinc-800/80">
-            <div className="grid size-9 place-items-center rounded-xl bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-400/20">
-              <Layers2 className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-zinc-100">
-                {drawings.find((d) => d.id === currentDrawingId)?.name || "Untitled canvas"}
-              </p>
-            </div>
-          </div>
+        <div className="fixed right-4 top-4 z-50 flex items-center gap-2 rounded-2xl p-2">
+          <button
+            type="button"
+            onClick={() =>
+              setCanvasBoard((prev: any) => ({
+                ...prev,
+                scaleLock: !prev.scaleLock,
+              }))
+            }
+            className="grid size-9 place-items-center rounded-xl border border-muted bg-background/80 text-zinc-200 transition-colors hover:bg-muted"
+            aria-label="Toggle canvas lock"
+          >
+            {(useCanvasState() as any)?.CanvasBoard?.scaleLock ? (
+              <Lock className="h-4 w-4 text-cyan-400" />
+            ) : (
+              <LockOpen className="h-4 w-4" />
+            )}
+          </button>
 
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="size-9 rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-200 shadow-none hover:bg-zinc-800" />
-            <button
-              type="button"
-              onClick={() =>
-                setCanvasBoard((prev: any) => ({
-                  ...prev,
-                  scaleLock: !prev.scaleLock,
-                }))
-              }
-              className="grid size-9 place-items-center rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-200 transition-colors hover:bg-zinc-800"
-              aria-label="Toggle canvas lock"
+          {user ? (
+            <ProfileMenu
+              ImageSrc={user.image || ""}
+              Name={user.name || ""}
+              Email={user.email || ""}
+            />
+          ) : (
+            <a
+              href="/login"
+              className="grid h-9 items-center rounded-xl border border-muted bg-background/80 px-3 text-sm text-zinc-200 transition-colors hover:bg-muted"
             >
-              {(useCanvasState() as any)?.CanvasBoard?.scaleLock ? (
-                <Lock className="h-4 w-4 text-cyan-400" />
-              ) : (
-                <LockOpen className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+              Log in
+            </a>
+          )}
         </div>
         <AutoSaveIndicator />
       </div>

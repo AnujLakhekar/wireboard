@@ -9,12 +9,14 @@ interface CanvasState {
   objects: CanvasObject[];
   objectsById: Record<string, CanvasObject>;
   selectedIds: string[];
+  currentCanvasBackground: string;
   setObjects: (
     objects: CanvasObject[] | ((objects: CanvasObject[]) => CanvasObject[]),
   ) => void;
   updateObject: (id: string, updates: Partial<CanvasObject>) => void;
   setSelectedIds: (ids: string[]) => void;
   addObject: (obj: CanvasObject) => void;
+  setCurrentCanvasBackground: (color: string) => void;
 }
 
 const normalizeObjects = (objects: CanvasObject[]) => {
@@ -36,6 +38,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   objects: [],
   objectsById: {},
   selectedIds: [],
+  currentCanvasBackground: "blue",
   setObjects: (objects) =>
     set((state) => {
       const nextObjects =
@@ -77,4 +80,6 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         objectsById: normalized.objectsById,
       };
     }),
+  setCurrentCanvasBackground: (color) =>
+    set({ currentCanvasBackground: color }),
 }));
