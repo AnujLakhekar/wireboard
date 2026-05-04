@@ -562,7 +562,7 @@ const SpriteScriptEditor = ({
                 <span className="w-2 h-2 rounded-full bg-blue-400"></span>
                 Script Code (executed every frame)
               </label>
-              <div className="h-[340px] overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950">
+              <div className="h-85 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950">
                 <Editor
                   language="javascript"
                   value={code}
@@ -659,7 +659,7 @@ const SpriteScriptEditor = ({
                   <span>sprite-script.js</span>
                   <span className="uppercase tracking-wide">JavaScript</span>
                 </div>
-                <div className="h-[220px]">
+                <div className="h-55">
                   <Editor
                     language="javascript"
                     value={spriteCodeBlockSample}
@@ -2527,7 +2527,7 @@ function Canvas({
                 }
               >
                 <PanelLeftIcon
-                  className={`h-3.5 w-3.5 transition-transform ${isWorkspacePanelCollapsed ? "rotate-180 relative right-[20px] top-[-10px]" : ""}`}
+                  className={`h-3.5 w-3.5 transition-transform ${isWorkspacePanelCollapsed ? "rotate-180 relative right-5 -top-2.5" : ""}`}
                 />
               </Button>
             </div>

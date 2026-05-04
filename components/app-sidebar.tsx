@@ -129,14 +129,7 @@ export function AppSidebar() {
     pathname === href || pathname.startsWith(`${href}/`);
 
   const { currentDrawingId, drawings } = useDrawings();
-  const [drawId, setDrawId] = useState(null);
-
-  useEffect(() => {
-    const usub = () => {
-      const drawingFound = drawings.find((d) => d.id === currentDrawingId);
-      setDrawId(drawingFound?.name);
-    };
-  }, [currentDrawingId, setDrawId]);
+  const drawId = drawings.find((d) => d.id === currentDrawingId)?.name ?? "";
 
   return (
     <Sidebar
