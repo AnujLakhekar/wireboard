@@ -133,7 +133,8 @@ export function LoginForm({
               variant="outline"
               type="button"
               onClick={() => {
-                const redirectTo = new URL("/app", window.location.origin).toString();
+                const appOrigin = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
+                const redirectTo = new URL("/app", appOrigin).toString();
                 void signIn("google", { redirectTo });
               }}
             >

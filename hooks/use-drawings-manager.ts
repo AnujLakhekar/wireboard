@@ -23,6 +23,8 @@ type RemoteDrawing = {
   thumbnail?: string;
 };
 
+type CloudStatus = "signed-out" | "syncing" | "synced" | "error";
+
 export function useDrawingsManager() {
   const [doc] = useState(() => new Y.Doc());
   const [drawings, setDrawings] = useState<Drawing[]>([]);
@@ -233,11 +235,11 @@ export function useDrawingsManager() {
     saveStatus,
     lastSaveTime,
     isCloudSynced: Boolean(isAuthenticated && isSynced),
-    cloudStatus: isAuthLoading
+    cloudStatus: (isAuthLoading
       ? "syncing"
       : isAuthenticated
         ? (isSynced ? "synced" : "syncing")
-        : "signed-out",
+        : "signed-out") as CloudStatus,
     // Helper to get the actual drawing object
     currentDrawing: drawings.find(d => d.id === currentDrawingId) || null
   };
