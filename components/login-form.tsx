@@ -132,7 +132,10 @@ export function LoginForm({
             <Button
               variant="outline"
               type="button"
-              onClick={() => void signIn("google")}
+              onClick={() => {
+                const redirectTo = new URL("/app", window.location.origin).toString();
+                void signIn("google", { redirectTo });
+              }}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
                 <path

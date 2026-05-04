@@ -13,11 +13,16 @@ const schema = defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
   }).index("email", ["email"]),
+  
   drawings: defineTable({
     title: v.string(),
     userId: v.id("users"),
+    clientId: v.optional(v.string()),
     data: v.string(), // For your canvas JSON or elements
-  }).index("by_user", ["userId"]),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"]) // query by user
+    .index("by_clientId", ["clientId"]), // quick lookup by client id
 
   stages: defineTable({
     name: v.string(),

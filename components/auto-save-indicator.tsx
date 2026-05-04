@@ -5,23 +5,10 @@ import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useDrawings } from "@/providers/DrawingsProvider";
 
 export function AutoSaveIndicator() {
-  const { saveStatus, lastSaveTime, isSynced } = useDrawings();
-  const [showIndicator, setShowIndicator] = useState(false);
+  const { saveStatus, lastSaveTime, isSynced, cloudStatus } = useDrawings();
   const [timeSinceLastSave, setTimeSinceLastSave] = useState("");
 
-  useEffect(() => {
-    // Show indicator when saving or if error
-    if (saveStatus === "saving" || saveStatus === "error" || isSynced) {
-      setShowIndicator(true);
-    }
-
-    // Hide indicator after successfully saved (after 2 seconds)
-    if (saveStatus === "saved") {
-      setShowIndicator(true);
-      const timeout = setTimeout(() => setShowIndicator(false), 2000);
-      return () => clearTimeout(timeout);
-    }
-  }, [saveStatus]);
+  const showIndicator = saveStatus !== "idle" || isSynced;
 
   // Update time since last save
   useEffect(() => {
@@ -54,12 +41,17 @@ export function AutoSaveIndicator() {
       {saveStatus === "saved" && <CheckCircle2 className="h-4 w-4 text-accent" />}
       {saveStatus === "error" && <AlertCircle className="h-4 w-4 text-destructive" />}
       <div className="leading-tight">
-    
         <div className="text-xs text-zinc-200">
           {saveStatus === "saving" && "Syncing changes"}
           {saveStatus === "saved" && (timeSinceLastSave ? `Saved ${timeSinceLastSave}` : "Saved")}
           {saveStatus === "error" && "Sync failed"}
           {saveStatus === "idle" && isSynced && (timeSinceLastSave ? `Saved ${timeSinceLastSave}` : "Ready")}
+        </div>
+        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {cloudStatus === "synced" && "Cloud sync on"}
+          {cloudStatus === "syncing" && "Cloud sync connecting"}
+          {cloudStatus === "signed-out" && "Cloud sync off"}
+          {cloudStatus === "error" && "Cloud sync error"}
         </div>
       </div>
     </div>

@@ -1,15 +1,27 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import * as Y from "yjs";
 import { IndexeddbPersistence } from "y-indexeddb";
+import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 export interface Drawing {
   id: string;
   name: string;
-  objects: any[];
+  objects: unknown[];
   createdAt: number;
   updatedAt: number;
   thumbnail?: string;
 }
+
+type RemoteDrawing = {
+  _id: string;
+  clientId?: string;
+  title: string;
+  data: string;
+  updatedAt?: number;
+  createdAt?: number;
+  thumbnail?: string;
+};
 
 export function useDrawingsManager() {
   const [doc] = useState(() => new Y.Doc());
@@ -17,8 +29,20 @@ export function useDrawingsManager() {
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
   const [isSynced, setIsSynced] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [lastSaveTime, setLastSaveTime] = useState<number>(Date.now());
+  const [lastSaveTime, setLastSaveTime] = useState<number>(() => Date.now());
   const saveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCloudSyncRef = useRef<Record<string, number>>({});
+  const applyingRemoteRef = useRef(false);
+
+  // Convex hooks: remote list and mutation
+  const remoteDrawingsResult = useQuery(api.drawings.listForUser);
+  const remoteDrawings = useMemo(
+    () => remoteDrawingsResult ?? [],
+    [remoteDrawingsResult],
+  );
+  const upsertDrawingMutation = useMutation(api.drawings.upsertDrawing);
+  const deleteDrawingMutation = useMutation(api.drawings.deleteDrawing);
+  const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
 
   const markSaving = useCallback(() => {
     if (saveStatusTimerRef.current) {
@@ -64,6 +88,80 @@ export function useDrawingsManager() {
     };
   }, [doc]);
 
+  useEffect(() => {
+    if (!isSynced || remoteDrawings.length === 0) return;
+
+    applyingRemoteRef.current = true;
+    const yDrawingsMap = doc.getMap<Drawing>("drawings-map");
+
+    doc.transact(() => {
+      for (const remoteDrawing of remoteDrawings as RemoteDrawing[]) {
+        try {
+          const clientId = remoteDrawing.clientId ?? remoteDrawing._id;
+          if (!clientId) continue;
+
+          const remoteUpdated = remoteDrawing.updatedAt ?? 0;
+          const payload =
+            typeof remoteDrawing.data === "string"
+              ? JSON.parse(remoteDrawing.data)
+              : remoteDrawing.data;
+
+          const local = yDrawingsMap.get(clientId);
+          const localUpdated = local?.updatedAt ?? 0;
+
+          if (!local || remoteUpdated >= localUpdated) {
+            yDrawingsMap.set(clientId, {
+              id: clientId,
+              name: payload?.name ?? remoteDrawing.title ?? "Untitled",
+              objects: payload?.objects ?? [],
+              createdAt: payload?.createdAt ?? remoteDrawing.createdAt ?? Date.now(),
+              updatedAt: remoteUpdated || Date.now(),
+              thumbnail: payload?.thumbnail,
+            });
+            lastCloudSyncRef.current[clientId] = remoteUpdated || Date.now();
+          }
+        } catch (error) {
+          console.warn("Failed to merge remote drawing", error);
+        }
+      }
+    });
+
+    queueMicrotask(() => {
+      applyingRemoteRef.current = false;
+    });
+  }, [doc, isSynced, remoteDrawings]);
+
+  // Push local changes to Convex (debounced) when drawings or sync state changes
+  useEffect(() => {
+    if (!isSynced) return;
+    if (isAuthLoading || !isAuthenticated) return;
+    if (applyingRemoteRef.current) return;
+
+    const timer = setTimeout(() => {
+      (async () => {
+        for (const d of drawings) {
+          try {
+            const lastCloud = lastCloudSyncRef.current[d.id] ?? 0;
+            if ((d.updatedAt ?? 0) > lastCloud) {
+              await upsertDrawingMutation({
+                clientId: d.id,
+                title: d.name,
+                data: JSON.stringify(d),
+                updatedAt: d.updatedAt ?? Date.now(),
+              });
+              lastCloudSyncRef.current[d.id] = d.updatedAt ?? Date.now();
+            }
+          } catch (e) {
+            console.warn("Failed to upsert drawing to cloud", e);
+            setSaveStatus("error");
+          }
+        }
+      })();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [drawings, isAuthenticated, isAuthLoading, isSynced, upsertDrawingMutation]);
+
   // Create a new drawing
   const createDrawing = useCallback((name: string): string => {
     markSaving();
@@ -82,7 +180,7 @@ export function useDrawingsManager() {
   }, [doc, markSaving]);
 
   // Update current drawing (Optimized: No delete/insert dance)
-  const updateCurrentDrawing = useCallback((objects: any[]) => {
+  const updateCurrentDrawing = useCallback((objects: unknown[]) => {
     if (!currentDrawingId) return;
     markSaving();
 
@@ -105,7 +203,14 @@ export function useDrawingsManager() {
     markSaving();
     doc.getMap("drawings-map").delete(id);
     if (currentDrawingId === id) setCurrentDrawingId(null);
-  }, [currentDrawingId, doc, markSaving]);
+
+    if (isAuthenticated) {
+      void deleteDrawingMutation({ clientId: id }).catch((error) => {
+        console.warn("Failed to delete drawing from cloud", error);
+        setSaveStatus("error");
+      });
+    }
+  }, [currentDrawingId, deleteDrawingMutation, doc, isAuthenticated, markSaving]);
 
   const renameDrawing = useCallback((id: string, newName: string) => {
     markSaving();
@@ -127,6 +232,12 @@ export function useDrawingsManager() {
     isSynced,
     saveStatus,
     lastSaveTime,
+    isCloudSynced: Boolean(isAuthenticated && isSynced),
+    cloudStatus: isAuthLoading
+      ? "syncing"
+      : isAuthenticated
+        ? (isSynced ? "synced" : "syncing")
+        : "signed-out",
     // Helper to get the actual drawing object
     currentDrawing: drawings.find(d => d.id === currentDrawingId) || null
   };
