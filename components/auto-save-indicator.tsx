@@ -5,7 +5,15 @@ import { CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { useDrawings } from "@/providers/DrawingsProvider";
 
 export function AutoSaveIndicator() {
-  const { saveStatus, lastSaveTime, isSynced, cloudStatus } = useDrawings();
+  const { 
+    saveStatus, 
+    lastSaveTime, 
+    isSynced, 
+    cloudStatus, 
+    cloudDrawingCount, 
+    localOnlyDrawingCount,
+    isAuthLoading 
+  } = useDrawings();
   const [timeSinceLastSave, setTimeSinceLastSave] = useState("");
 
   const showIndicator = saveStatus !== "idle" || isSynced;
@@ -48,10 +56,16 @@ export function AutoSaveIndicator() {
           {saveStatus === "idle" && isSynced && (timeSinceLastSave ? `Saved ${timeSinceLastSave}` : "Ready")}
         </div>
         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {cloudStatus === "synced" && "Cloud sync on"}
-          {cloudStatus === "syncing" && "Cloud sync connecting"}
-          {cloudStatus === "signed-out" && "Cloud sync off"}
-          {cloudStatus === "error" && "Cloud sync error"}
+          {isAuthLoading && "Authenticating..."}
+          {!isAuthLoading && cloudStatus === "synced" && `Cloud sync on (${cloudDrawingCount}/6)`}
+          {!isAuthLoading && cloudStatus === "syncing" && "Cloud sync connecting"}
+          {!isAuthLoading && cloudStatus === "signed-out" && "Cloud sync off"}
+          {!isAuthLoading && cloudStatus === "error" && "Cloud sync error"}
+          {localOnlyDrawingCount > 0 && (
+            <div className="text-[9px] text-yellow-500/80 mt-1">
+              {localOnlyDrawingCount} drawing{localOnlyDrawingCount > 1 ? "s" : ""} local only
+            </div>
+          )}
         </div>
       </div>
     </div>

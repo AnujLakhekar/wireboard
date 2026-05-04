@@ -93,6 +93,7 @@ import { useCanvasState } from "@/providers/CanvasStateProvider";
 import { useCanvasPersistence } from "@/hooks/use-canvas-persistence";
 import { useDrawings } from "@/providers/DrawingsProvider";
 import { AutoSaveIndicator } from "@/components/auto-save-indicator";
+import { CanvasSkeleton } from "@/components/canvas-skeleton";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useCanvasUIStore } from "@/store/useCanvasUIStore";
 import { Slider } from "@/components/ui/slider";
@@ -3208,6 +3209,7 @@ const CanvasBoard = () => {
     renameDrawing,
     deleteDrawing,
     updateCurrentDrawing,
+    isAuthLoading,
   } = useDrawings();
 
   // Initialize persistence
@@ -3262,7 +3264,8 @@ const CanvasBoard = () => {
 
   return (
     <>
-      <div className="relative w-full h-full overflow-hidden bg-background">
+      {isAuthLoading && <CanvasSkeleton />}
+      <div className={`relative w-full h-full overflow-hidden bg-background ${isAuthLoading ? "hidden" : ""}`}>
         <Canvas
           objects={objects}
           setObjects={setObjects}

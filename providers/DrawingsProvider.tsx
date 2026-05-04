@@ -22,6 +22,10 @@ interface DrawingsContextType {
   lastSaveTime: number;
   isSynced: boolean;
   cloudStatus: 'signed-out' | 'syncing' | 'synced' | 'error';
+  isAuthLoading: boolean;
+  cloudDrawingCount: number;
+  localOnlyDrawingCount: number;
+  isDrawingLocalOnly: (drawingId: string) => boolean;
 }
 
 const DrawingsContext = createContext<DrawingsContextType | undefined>(undefined);
@@ -39,6 +43,10 @@ export function DrawingsProvider({ children }: { children: React.ReactNode }) {
     saveStatus,
     lastSaveTime,
     cloudStatus,
+    isAuthLoading,
+    cloudDrawingCount,
+    localOnlyDrawingCount,
+    isDrawingLocalOnly,
   } = useDrawingsManager();
 
   const value: DrawingsContextType = {
@@ -53,6 +61,10 @@ export function DrawingsProvider({ children }: { children: React.ReactNode }) {
     saveStatus,
     lastSaveTime,
     cloudStatus,
+    isAuthLoading,
+    cloudDrawingCount,
+    localOnlyDrawingCount,
+    isDrawingLocalOnly,
   };
 
   return (

@@ -25,6 +25,8 @@ type RemoteDrawing = {
 
 type CloudStatus = "signed-out" | "syncing" | "synced" | "error";
 
+const CLOUD_DRAWING_LIMIT = 6;
+
 export function useDrawingsManager() {
   const [doc] = useState(() => new Y.Doc());
   const [drawings, setDrawings] = useState<Drawing[]>([]);
@@ -134,6 +136,7 @@ export function useDrawingsManager() {
   }, [doc, isSynced, remoteDrawings]);
 
   // Push local changes to Convex (debounced) when drawings or sync state changes
+  // Only sync the first 6 drawings to cloud; rest stay local only
   useEffect(() => {
     if (!isSynced) return;
     if (isAuthLoading || !isAuthenticated) return;
@@ -141,7 +144,8 @@ export function useDrawingsManager() {
 
     const timer = setTimeout(() => {
       (async () => {
-        for (const d of drawings) {
+        const drawingsToSync = drawings.slice(0, CLOUD_DRAWING_LIMIT);
+        for (const d of drawingsToSync) {
           try {
             const lastCloud = lastCloudSyncRef.current[d.id] ?? 0;
             if ((d.updatedAt ?? 0) > lastCloud) {
@@ -223,6 +227,9 @@ export function useDrawingsManager() {
     }
   }, [doc, markSaving]);
 
+  const cloudDrawingCount = Math.min(drawings.length, CLOUD_DRAWING_LIMIT);
+  const localOnlyDrawingCount = Math.max(0, drawings.length - CLOUD_DRAWING_LIMIT);
+
   return {
     drawings,
     currentDrawingId,
@@ -234,12 +241,19 @@ export function useDrawingsManager() {
     isSynced,
     saveStatus,
     lastSaveTime,
+    isAuthLoading,
     isCloudSynced: Boolean(isAuthenticated && isSynced),
     cloudStatus: (isAuthLoading
       ? "syncing"
       : isAuthenticated
         ? (isSynced ? "synced" : "syncing")
         : "signed-out") as CloudStatus,
+    cloudDrawingCount,
+    localOnlyDrawingCount,
+    isDrawingLocalOnly: (drawingId: string) => {
+      const index = drawings.findIndex(d => d.id === drawingId);
+      return index >= CLOUD_DRAWING_LIMIT;
+    },
     // Helper to get the actual drawing object
     currentDrawing: drawings.find(d => d.id === currentDrawingId) || null
   };
