@@ -28,12 +28,12 @@ const ProfileMenu = ({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          className="relative grid size-9 place-items-center rounded-xl border border-muted bg-background/80 p-0 text-zinc-200 transition-colors hover:bg-muted"
+          className="relative grid size-9 place-items-center rounded-full  text-zinc-200 transition-colors"
           variant="ghost"
         >
           <Avatar>
             <AvatarImage alt="@haydenbleasel" src={ImageSrc} />
-            <AvatarFallback>HB</AvatarFallback>
+            <AvatarFallback>{Name.split(" ")[0]}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>

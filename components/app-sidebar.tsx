@@ -46,6 +46,9 @@ import { DrawingsList } from "@/components/drawings-list";
 import { useCanvasStore } from "@/store/useCanvasStore";
 import { useDrawings } from "@/providers/DrawingsProvider";
 import { Button } from "./ui/button";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 type ThemeMode = "light" | "dark" | "system";
 const THEME_STORAGE_KEY = "wireboard-theme";
@@ -71,8 +74,12 @@ export function AppSidebar() {
   const pathname = usePathname();
   const [compactMode, setCompactMode] = useState(false);
   const [storage, setStorage] = useState<StorageInfo | null>(null);
+  const [randomName, setRandomName] = useState("Guest");
+  const user = useQuery(api.users.viewer);
 
   function RandomNameGenerator() {
+    if (typeof window === "undefined") return "Guest";
+    
     if (localStorage.getItem("randomName")) {
       return localStorage.getItem("randomName")!;
     }
@@ -85,6 +92,21 @@ export function AppSidebar() {
     localStorage.setItem("randomName", randomName);
     return randomName;
   }
+
+  React.useEffect(() => {
+    // Generate or retrieve random name for sidebar
+    if (localStorage.getItem("randomName")) {
+      setRandomName(localStorage.getItem("randomName")!);
+    } else {
+      const adjectives = ["Swift", "Silent", "Mighty", "Brave", "Clever"];
+      const nouns = ["Eagle", "Tiger", "Shark", "Panther", "Wolf"];
+      const adjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+      const noun = nouns[Math.floor(Math.random() * nouns.length)];
+      const name = `${adjective}${noun}`;
+      localStorage.setItem("randomName", name);
+      setRandomName(name);
+    }
+  }, []);
 
   React.useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.storage) return;
@@ -130,6 +152,8 @@ export function AppSidebar() {
 
   const { currentDrawingId, drawings } = useDrawings();
   const drawId = drawings.find((d) => d.id === currentDrawingId)?.name ?? "";
+
+  const { signOut } = useAuthActions();
 
   return (
     <Sidebar
@@ -209,7 +233,7 @@ export function AppSidebar() {
           </div>
           <div className="min-w-0 flex-1 leading-tight">
             <p className="truncate text-sm font-medium text-sidebar-foreground">
-              Localuser
+              {user?.name ? `${user.name}` : randomName}
             </p>
             <p className="truncate text-[11px] text-sidebar-foreground/60">
               storage in use: {storage && storage.mb}
@@ -285,7 +309,14 @@ export function AppSidebar() {
                   </MenubarSubContent>
                 </MenubarSub>
                 <MenubarSeparator className="bg-border" />
-                <MenubarItem className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                <MenubarItem
+                  onClick={() => {
+                    signOut();
+                    window.location.reload()
+                  }}
+                  
+                  className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                >
                   Sign out
                 </MenubarItem>
               </MenubarContent>
