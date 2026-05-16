@@ -2,13 +2,14 @@
 import React, { useState, useEffect, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
 
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 
 import {
   Stage,
   Layer,
   Rect,
   Text,
+  Group as KonvaGroup,
   Circle,
   Star,
   Arrow,
@@ -21,7 +22,7 @@ import {
 } from "react-konva";
 import { KonvaEventObject } from "konva/lib/Node";
 import Konva from "konva";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 // Shadcn UI Context Menu
 import {
@@ -117,6 +118,54 @@ const spriteCodeBlockSample = `function SpriteBehavior(sprite, frame, time) {
   sprite.moveTo(x, y);
 }`;
 
+// Compress image before upload
+const compressImage = async (
+  file: File,
+  maxWidth: number = 1920,
+  quality: number = 0.75,
+): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Failed to get canvas context"));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) resolve(blob);
+            else reject(new Error("Failed to compress image"));
+          },
+          "image/webp",
+          quality,
+        );
+      };
+      img.onerror = () => reject(new Error("Failed to load image"));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+};
+
 const Exporter = () => {
   return <></>;
 };
@@ -189,7 +238,7 @@ const Controller = ({
   return (
     <div
       ref={dropdownRef}
-      className="fixed bottom-4 left-1/2 z-60 w-[min(70vw,26rem)] -translate-x-1/2"
+      className="fixed bottom-4 left-1/2 z-40 w-[16vw] -translate-x-1/2"
     >
       <Card className="overflow-visible rounded-2xl border border-muted/70 bg-background backdrop-blur-xl">
         <CardContent className="p-0">
@@ -237,24 +286,6 @@ const Controller = ({
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={() => onAddShape("arrow")}
-              className="flex h-10 items-center gap-2 rounded-xl border border-muted/70 bg-muted px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-zinc-600 hover:bg-muted"
-              aria-label="Arrow"
-            >
-              <ArrowRightFromLine className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onAddShape("star")}
-              className="flex h-10 items-center gap-2 rounded-xl border border-muted/70 bg-muted px-3 text-xs font-medium text-muted-foreground transition-colors hover:border-zinc-600 hover:bg-muted"
-              aria-label="Star"
-            >
-              <StarIcon className="h-4 w-4" />
-            </button>
 
             <div className="h-7 w-px bg-zinc-800" />
 
@@ -389,8 +420,51 @@ const CanvasImageShape = ({
   commonProps: any;
 }) => {
   const [image, status] = useImage(obj.src || "");
+  const [shimmerOffset, setShimmerOffset] = React.useState(0);
+
+  React.useEffect(() => {
+    if (status !== "loading") return;
+
+    const interval = setInterval(() => {
+      setShimmerOffset((prev) => (prev + 20) % 400);
+    }, 30);
+
+    return () => clearInterval(interval);
+  }, [status]);
 
   if (!image) {
+    if (status === "loading") {
+      return (
+        <KonvaGroup {...commonProps}>
+          {/* Background Rect */}
+          <Rect
+            width={obj.width || 120}
+            height={obj.height || 120}
+            fill="#f0f0f0"
+            stroke="#e5e7eb"
+            cornerRadius={6}
+          />
+          {/* Shimmer overlay */}
+          <Rect
+            width={obj.width || 120}
+            height={obj.height || 120}
+            fill={`url(#shimmer-${shimmerOffset})`}
+            opacity={0.6}
+            cornerRadius={6}
+          />
+          <Text
+            text="Loading..."
+            fontSize={12}
+            fill="#9ca3af"
+            align="center"
+            verticalAlign="middle"
+            width={obj.width || 120}
+            height={obj.height || 120}
+          />
+        </KonvaGroup>
+      );
+    }
+
     return (
       <Rect
         {...commonProps}
@@ -728,6 +802,8 @@ const SpriteManager = ({
 }) => {
   const [spriteUrl, setSpriteUrl] = useState(spriteObj?.src || "");
   const spriteInputRef = useRef<HTMLInputElement>(null);
+  const generateUploadUrl = useMutation(api.genStorage.generateUploadUrl);
+  const getStorageUrl = useMutation(api.genStorage.getStorageUrl);
 
   useEffect(() => {
     if (isOpen) {
@@ -735,17 +811,29 @@ const SpriteManager = ({
     }
   }, [isOpen, spriteObj?.id, spriteObj?.src]);
 
-  const handleSpriteFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSpriteFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      setSpriteUrl(dataUrl);
-      onSpriteUpdate({ src: dataUrl });
-    };
-    reader.readAsDataURL(file);
+    try {
+      const uploadUrl = await generateUploadUrl();
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+
+      if (!response.ok) throw new Error("Failed to upload sprite");
+      const { storageId } = await response.json();
+
+      // Get the proper Convex storage URL
+      const spriteImageUrl = await getStorageUrl({ storageId });
+      if (!spriteImageUrl) throw new Error("Failed to resolve sprite URL");
+      setSpriteUrl(spriteImageUrl);
+      onSpriteUpdate({ src: spriteImageUrl });
+    } catch (err) {
+      console.error("Sprite upload error:", err);
+    }
   };
 
   const handleUrlChange = () => {
@@ -1105,21 +1193,16 @@ function Canvas({
   // Local state only (non-UI preferences)
   const [size, setSize] = useState({ width: 0, height: 0 });
   const [history, setHistory] = useState<any[]>([]);
-  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
 
   const trRef = useRef<Konva.Transformer>(null);
   const currentStage = useRef<Konva.Stage>(null);
   const isDrawingRef = useRef(false);
+  const currentStrokeIdRef = useRef<string | null>(null);
   const mediaFileRef = useRef<HTMLInputElement>(null);
   const addImageFileRef = useRef<HTMLInputElement>(null);
   const mediaTargetIdRef = useRef<string | null>(null);
   const router = useRouter();
   const { CanvasBoard, setCanvasBoard } = useCanvasState() as any;
-  const drawingCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawingContextRef = useRef<CanvasRenderingContext2D | null>(null);
-  const drawingImageRef = useRef<any>(null);
-  const lastPosition = useRef<{ x: number; y: number } | null>(null);
-  const drawingOriginRef = useRef({ x: 0, y: 0 });
 
   // Sprite script refs
   const spriteScriptTimersRef = useRef<Map<string, number>>(new Map());
@@ -1235,6 +1318,11 @@ function Canvas({
       trRef.current?.nodes([]);
     }
   }, [selectedIds, objects]);
+
+  useEffect(() => {
+    isDrawingRef.current = false;
+    currentStrokeIdRef.current = null;
+  }, [currentDrawingId]);
 
   // Sprite script execution effect
   useEffect(() => {
@@ -1372,40 +1460,6 @@ function Canvas({
     stage.container().style.backgroundColor = canvasBackground;
   }, [canvasBackground]);
 
-  useEffect(() => {
-    if (drawingCanvasRef.current || typeof document === "undefined") return;
-
-    const nextCanvas = document.createElement("canvas");
-    nextCanvas.width = Math.max(4096, Math.ceil(window.innerWidth * 2));
-    nextCanvas.height = Math.max(4096, Math.ceil(window.innerHeight * 2));
-    drawingOriginRef.current = {
-      x: Math.floor(nextCanvas.width / 2),
-      y: Math.floor(nextCanvas.height / 2),
-    };
-
-    const context = nextCanvas.getContext("2d");
-    if (context) {
-      context.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
-      context.lineJoin = "round";
-      context.lineCap = "round";
-    }
-
-    drawingCanvasRef.current = nextCanvas;
-    drawingContextRef.current = context;
-    setCanvas(nextCanvas);
-  }, []);
-
-  useEffect(() => {
-    const drawingCanvas = drawingCanvasRef.current;
-    const context = drawingContextRef.current;
-    if (!drawingCanvas || !context) return;
-
-    context.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-    drawingImageRef.current?.getLayer?.()?.batchDraw();
-    isDrawingRef.current = false;
-    lastPosition.current = null;
-  }, [currentDrawingId]);
-
   const getWorldPointer = (stage: Konva.Stage) => {
     const pointer = stage.getPointerPosition();
     if (!pointer) return null;
@@ -1416,41 +1470,35 @@ function Canvas({
     };
   };
 
-  const paintSegment = (
-    from: { x: number; y: number },
-    to: { x: number; y: number },
-  ) => {
-    const context = drawingContextRef.current;
-    const imageNode = drawingImageRef.current;
-    if (!context || !imageNode) return;
-
-    const origin = drawingOriginRef.current;
-    const fromCanvas = { x: from.x + origin.x, y: from.y + origin.y };
-    const toCanvas = { x: to.x + origin.x, y: to.y + origin.y };
-
-    context.save();
-    context.globalCompositeOperation =
-      drawTool === "eraser" ? "destination-out" : "source-over";
-    context.strokeStyle = drawTool === "eraser" ? "rgba(0,0,0,1)" : drawColor;
-    context.lineWidth = drawSize;
-    context.setLineDash(brushStyleToDash(drawStyle));
-    context.beginPath();
-    context.moveTo(fromCanvas.x, fromCanvas.y);
-    context.lineTo(toCanvas.x, toCanvas.y);
-    context.stroke();
-    context.closePath();
-    context.restore();
-
-    imageNode.getLayer()?.batchDraw();
-  };
-
   const startDrawing = (stage: Konva.Stage) => {
     const pointer = getWorldPointer(stage);
     if (!pointer) return;
 
     isDrawingRef.current = true;
-    lastPosition.current = pointer;
-    paintSegment(pointer, pointer);
+    const strokeId = `line-${uuidv4()}`;
+    const points = [pointer.x, pointer.y];
+    currentStrokeIdRef.current = strokeId;
+
+    setObjects((prev: any[]) => [
+      ...prev,
+      {
+        id: strokeId,
+        type: "line",
+        tool: drawTool,
+        points,
+        stroke: drawTool === "eraser" ? "#000000" : drawColor,
+        strokeWidth: drawSize,
+        dash: brushStyleToDash(drawStyle),
+        tension: 0.5,
+        lineCap: "round",
+        lineJoin: "round",
+        globalCompositeOperation:
+          drawTool === "eraser" ? "destination-out" : "source-over",
+        draggable: false,
+        listening: false,
+        perfectDrawEnabled: false,
+      },
+    ]);
   };
 
   const continueDrawing = (stage: Konva.Stage) => {
@@ -1459,15 +1507,29 @@ function Canvas({
 
     setCursorPos(pointer);
 
-    if (!isDrawingRef.current || !lastPosition.current) return;
+    if (!isDrawingRef.current || !currentStrokeIdRef.current) return;
 
-    paintSegment(lastPosition.current, pointer);
-    lastPosition.current = pointer;
+    setObjects((prev: any[]) =>
+      prev.map((obj) => {
+        if (obj.id !== currentStrokeIdRef.current) return obj;
+
+        const points = (obj.points || []).concat([pointer.x, pointer.y]);
+        return {
+          ...obj,
+          points,
+        };
+      }),
+    );
   };
 
   const stopDrawing = () => {
     isDrawingRef.current = false;
-    lastPosition.current = null;
+    if (currentStrokeIdRef.current) {
+      updateObj(currentStrokeIdRef.current, {
+        perfectDrawEnabled: true,
+      });
+    }
+    currentStrokeIdRef.current = null;
   };
 
   const handleStageClick = (e: KonvaEventObject<MouseEvent>) => {
@@ -1517,18 +1579,40 @@ function Canvas({
     mediaFileRef.current?.click();
   };
 
-  const handleMediaFileChange = (
+  const handleMediaFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
     const targetId = mediaTargetIdRef.current;
     if (!file || !targetId) return;
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = String(ev.target?.result || "");
-      const image = new window.Image();
+    try {
+      console.log(`Media file size: ${(file.size / 1024).toFixed(2)} KB`);
 
+      // Compress before upload
+      const compressedBlob = await compressImage(file, 1920, 0.75);
+      console.log(
+        `Compressed size: ${(compressedBlob.size / 1024).toFixed(2)} KB`,
+      );
+
+      const uploadUrl = await generateUploadUrl();
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": "image/webp" },
+        body: compressedBlob,
+      });
+
+      if (!response.ok) throw new Error("Failed to upload image");
+      const { storageId } = await response.json();
+
+      // Get the proper Convex storage URL
+      const imageUrl = await getStorageUrl({ storageId });
+      if (!imageUrl) throw new Error("Failed to resolve image URL");
+      const resolvedImageUrl = imageUrl;
+
+      // Create image to get dimensions
+      const image = new window.Image();
+      image.crossOrigin = "anonymous";
       image.onload = () => {
         const canvasWidth = size.width || window.innerWidth;
         const canvasHeight = size.height || window.innerHeight;
@@ -1539,7 +1623,8 @@ function Canvas({
         );
 
         updateObj(targetId, {
-          src: dataUrl,
+          src: resolvedImageUrl,
+          storageId,
           width: Math.round(image.width * ratio),
           height: Math.round(image.height * ratio),
           rotation: 0,
@@ -1547,15 +1632,19 @@ function Canvas({
           scaleY: 1,
         });
       };
+      image.src = resolvedImageUrl;
 
-      image.src = dataUrl;
-    };
-
-    reader.readAsDataURL(file);
-    event.target.value = "";
+      if (!user?._id) throw new Error("User not authenticated");
+      await sendImage({ storageId, author: user._id });
+    } catch (err) {
+      console.error("Media file upload error:", err);
+      window.alert("Failed to upload image. Please try again.");
+    } finally {
+      event.target.value = "";
+    }
   };
 
-  const addImageFromUrl = () => {
+  const addImageFromUrlViaPrompt = () => {
     const source = window.prompt("Paste image URL");
     if (!source) return;
 
@@ -1771,11 +1860,14 @@ function Canvas({
     ]);
   };
 
-  const addImageFromDataUrl = (
-    dataUrl: string,
+  const addImageFromUrl = (
+    src: string,
     pointer?: { x: number; y: number },
+    storageId?: string,
   ) => {
     const image = new window.Image();
+    image.crossOrigin = "anonymous";
+
     image.onload = () => {
       const canvasWidth = size.width || window.innerWidth;
       const canvasHeight = size.height || window.innerHeight;
@@ -1801,35 +1893,66 @@ function Canvas({
           y,
           width: Math.round(image.width * ratio),
           height: Math.round(image.height * ratio),
-          src: dataUrl,
+          src,
+          storageId,
           draggable: true,
         },
       ]);
     };
-    image.src = dataUrl;
+    image.src = src;
   };
 
   const openImageUploadPicker = () => {
     addImageFileRef.current?.click();
   };
 
-  const handleAddImageFileChange = (
+  const generateUploadUrl = useMutation(api.genStorage.generateUploadUrl);
+  const sendImage = useMutation(api.genStorage.sendImage);
+  const getStorageUrl = useMutation(api.genStorage.getStorageUrl);
+  const deleteStorageFile = useMutation(api.genStorage.deleteStorageFile);
+  const user = useQuery(api.users.viewer);
+
+  const handleAddImageFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = String(ev.target?.result || "");
-      if (!dataUrl) return;
-      addImageFromDataUrl(dataUrl);
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
+    try {
+      console.log(`Original file size: ${(file.size / 1024).toFixed(2)} KB`);
+
+      // Compress before upload
+      const compressedBlob = await compressImage(file, 1920, 0.75);
+      console.log(
+        `Compressed size: ${(compressedBlob.size / 1024).toFixed(2)} KB`,
+      );
+
+      const uploadUrl = await generateUploadUrl();
+      const response = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": "image/webp" },
+        body: compressedBlob,
+      });
+
+      if (!response.ok) throw new Error("Failed to upload image");
+      const { storageId } = await response.json();
+
+      if (!user?._id) throw new Error("User not authenticated");
+      await sendImage({ storageId, author: user._id });
+
+      const imageUrl = await getStorageUrl({ storageId });
+      if (!imageUrl) throw new Error("Failed to resolve image URL");
+      const resolvedImageUrl = imageUrl;
+      addImageFromUrl(resolvedImageUrl, undefined, storageId);
+    } catch (err) {
+      console.error("Image upload error:", err);
+      window.alert("Failed to upload image. Please try again.");
+    } finally {
+      event.target.value = "";
+    }
   };
 
-  const handleCanvasDrop = (event: React.DragEvent<HTMLDivElement>) => {
+  const handleCanvasDrop = async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
 
     const stage = currentStage.current;
@@ -1843,13 +1966,37 @@ function Canvas({
 
     const droppedFile = event.dataTransfer.files?.[0];
     if (droppedFile && droppedFile.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const dataUrl = String(ev.target?.result || "");
-        if (!dataUrl) return;
-        addImageFromDataUrl(dataUrl, pointer);
-      };
-      reader.readAsDataURL(droppedFile);
+      try {
+        console.log(
+          `Dropped file size: ${(droppedFile.size / 1024).toFixed(2)} KB`,
+        );
+
+        // Compress before upload
+        const compressedBlob = await compressImage(droppedFile, 1920, 0.75);
+        console.log(
+          `Compressed size: ${(compressedBlob.size / 1024).toFixed(2)} KB`,
+        );
+
+        const uploadUrl = await generateUploadUrl();
+        const response = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": "image/webp" },
+          body: compressedBlob,
+        });
+
+        if (!response.ok) throw new Error("Failed to upload image");
+        const { storageId } = await response.json();
+
+        if (!user?._id) throw new Error("User not authenticated");
+        await sendImage({ storageId, author: user._id });
+
+        const imageUrl = await getStorageUrl({ storageId });
+        if (!imageUrl) throw new Error("Failed to resolve image URL");
+        const resolvedImageUrl = imageUrl;
+        addImageFromUrl(resolvedImageUrl, pointer, storageId);
+      } catch (err) {
+        console.error("Drop upload error:", err);
+      }
       return;
     }
 
@@ -1861,32 +2008,7 @@ function Canvas({
     const maybeUrl = uri.trim();
     if (!/^https?:\/\//i.test(maybeUrl)) return;
 
-    const image = new window.Image();
-    image.crossOrigin = "anonymous";
-    image.onload = () => {
-      const canvasWidth = size.width || window.innerWidth;
-      const canvasHeight = size.height || window.innerHeight;
-      const ratio = Math.min(
-        (canvasWidth - 40) / image.width,
-        (canvasHeight - 40) / image.height,
-        1,
-      );
-
-      setObjects((prev: any[]) => [
-        ...prev,
-        {
-          id: `image-${uuidv4()}`,
-          type: "image",
-          x: (pointer.x - stagePos.x) / scale,
-          y: (pointer.y - stagePos.y) / scale,
-          width: Math.round(image.width * ratio),
-          height: Math.round(image.height * ratio),
-          src: maybeUrl,
-          draggable: true,
-        },
-      ]);
-    };
-    image.src = maybeUrl;
+    addImageFromUrl(maybeUrl, pointer);
   };
 
   const markForGrouping = () => {
@@ -1977,9 +2099,25 @@ function Canvas({
 
   const deleteSelection = () => {
     if (selectedIds.length === 0) return;
-    setObjects((prev: any[]) =>
-      prev.filter((o) => !selectedIds.includes(o.id)),
+
+    // Find image objects with storageId and request storage deletion
+    const imagesToDelete = objects.filter(
+      (o: any) => selectedIds.includes(o.id) && o.type === "image" && o.storageId,
     );
+
+    if (imagesToDelete.length > 0) {
+      Promise.allSettled(
+        imagesToDelete.map((img) =>
+          deleteStorageFile({ storageId: img.storageId }).catch((e: any) =>
+            console.error("Failed deleting storage for image:", e),
+          ),
+        ),
+      ).then(() => {
+        // Fire-and-forget cleanup finished (or failed) — proceed to remove from canvas
+      });
+    }
+
+    setObjects((prev: any[]) => prev.filter((o) => !selectedIds.includes(o.id)));
     setSelectedIds([]);
   };
 
@@ -2157,6 +2295,11 @@ function Canvas({
               ),
             );
           }
+          break;
+        case "h": // Mark for layer
+          if (isCtrl) return;
+          e.preventDefault();
+          setIsWorkspacePanelCollapsed(!isWorkspacePanelCollapsed);
           break;
 
         // --- COPY (Ctrl + C) ---
@@ -2423,6 +2566,7 @@ function Canvas({
             if (!stage) return;
 
             if (activeTool === "draw") {
+              e.evt.preventDefault();
               continueDrawing(stage);
               return;
             }
@@ -2482,14 +2626,6 @@ function Canvas({
             )}
           </Layer>
 
-          <Layer listening={false}>
-            <Image
-              ref={drawingImageRef}
-              image={canvas ?? undefined}
-              x={-drawingOriginRef.current.x}
-              y={-drawingOriginRef.current.y}
-            />
-          </Layer>
         </Stage>
       </ContextMenuTrigger>
 
@@ -2509,6 +2645,9 @@ function Canvas({
               )}
             </div>
             <div
+              className={
+                !isWorkspacePanelCollapsed ? "" : "fixed top-1.5 left-1.5 "
+              }
               onClick={() =>
                 setIsWorkspacePanelCollapsed(!isWorkspacePanelCollapsed)
               }
@@ -2517,19 +2656,14 @@ function Canvas({
                 type="button"
                 size="icon"
                 variant="ghost"
-                className={
-                  "h-7 w-7 p-1 rounded-full border border-muted bg-background/80 " +
-                  ""
-                }
+                className={"h-7 w-7 p-1" + ""}
                 aria-label={
                   isWorkspacePanelCollapsed
                     ? "Expand workspace panel"
                     : "Collapse workspace panel"
                 }
               >
-                <PanelLeftIcon
-                  className={`h-3.5 w-3.5 transition-transform ${isWorkspacePanelCollapsed ? "rotate-180 relative right-5 -top-2.5" : ""}`}
-                />
+                <PanelLeftIcon />
               </Button>
             </div>
           </div>
@@ -2737,7 +2871,7 @@ function Canvas({
               Add Image
             </ContextMenuItem>
             <ContextMenuItem
-              onClick={addImageFromUrl}
+              onClick={addImageFromUrlViaPrompt}
               className="rounded-md px-2 py-1.5 text-xs"
             >
               Add Image From URL
@@ -3211,9 +3345,23 @@ const CanvasBoard = () => {
     updateCurrentDrawing,
     isAuthLoading,
   } = useDrawings();
+  const searchParams = useSearchParams();
+  const canvasIdFromUrl = searchParams.get("canvas");
 
   // Initialize persistence
   const { syncToYjs } = useCanvasPersistence(setObjects as any);
+
+  useEffect(() => {
+    if (!canvasIdFromUrl || drawings.length === 0) return;
+    if (currentDrawingId === canvasIdFromUrl) return;
+
+    const matchingDrawing = drawings.find(
+      (drawing) => drawing.id === canvasIdFromUrl,
+    );
+    if (matchingDrawing) {
+      setCurrentDrawingId(canvasIdFromUrl);
+    }
+  }, [canvasIdFromUrl, drawings, currentDrawingId, setCurrentDrawingId]);
 
   // Watch for drawing changes and load objects
   useEffect(() => {
@@ -3265,7 +3413,9 @@ const CanvasBoard = () => {
   return (
     <>
       {isAuthLoading && <CanvasSkeleton />}
-      <div className={`relative w-full h-full overflow-hidden bg-background ${isAuthLoading ? "hidden" : ""}`}>
+      <div
+        className={`relative w-full h-full overflow-hidden bg-background ${isAuthLoading ? "hidden" : ""}`}
+      >
         <Canvas
           objects={objects}
           setObjects={setObjects}

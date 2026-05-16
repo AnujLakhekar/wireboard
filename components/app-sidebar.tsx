@@ -12,6 +12,7 @@ import {
   Moon,
   Sun,
   Touchpad,
+  Palette,
 } from "lucide-react";
 
 import {
@@ -68,7 +69,10 @@ function applyTheme(mode: ThemeMode) {
   root.classList.toggle("dark", shouldUseDark);
 }
 
-const platformItems = [{ title: "Board", href: "/app", icon: FileText }];
+const platformItems = [
+  { title: "Board", href: "/app", icon: FileText },
+  { title: "Designer", href: "/designer", icon: Palette },
+];
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -158,7 +162,7 @@ export function AppSidebar() {
   return (
     <Sidebar
       collapsible="offcanvas"
-      className="border-r border-sidebar-border bg-sidebar text-sidebar-foreground "
+      className="border-r z-50 border-sidebar-border bg-sidebar text-sidebar-foreground "
     >
       {/* HEADER: Workspace Switcher */}
       <SidebarHeader className="p-4">
@@ -166,7 +170,7 @@ export function AppSidebar() {
           <div className="flex items-center gap-3">
             <div className="size-6 rounded bg-linear-to-br from-cyan-400 to-emerald-400 shadow-lg shadow-emerald-500/20" />
             <span className="text-sm font-semibold text-sidebar-foreground">
-              Wireboard {drawId}
+              {drawId ? drawId : "wireboard"}
             </span>
           </div>
           <button className="rounded p-1 transition-colors hover:bg-sidebar-accent">
@@ -188,7 +192,7 @@ export function AppSidebar() {
                   asChild
                   isActive={isActive(item.href)}
                   className={cn(
-                    "transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                    "transition-all mt-1 duration-200 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                     isActive(item.href) &&
                       "bg-sidebar-accent text-sidebar-accent-foreground",
                     compactMode ? "h-7" : "h-9",

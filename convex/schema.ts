@@ -28,6 +28,14 @@ const schema = defineSchema({
     name: v.string(),
     ownerId: v.id("users"),
   }).index("by_owner", ["ownerId"]),
+  images: defineTable({
+    url: v.string(),
+    ownerId: v.id("users"),
+    storageId: v.id("_storage"),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    permanent: v.boolean(),
+  }).index("by_owner", ["ownerId"]).index("by_expiry", ["expiresAt"]),
 });
 
 export default schema;

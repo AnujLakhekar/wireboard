@@ -48,7 +48,7 @@ export function AutoSaveIndicator() {
       {saveStatus === "saving" && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       {saveStatus === "saved" && <CheckCircle2 className="h-4 w-4 text-accent" />}
       {saveStatus === "error" && <AlertCircle className="h-4 w-4 text-destructive" />}
-      <div className="leading-tight">
+      <div className="leading-tight flex flex-col gap-1">
         <div className="text-xs text-zinc-200">
           {saveStatus === "saving" && "Syncing changes"}
           {saveStatus === "saved" && (timeSinceLastSave ? `Saved ${timeSinceLastSave}` : "Saved")}
@@ -57,15 +57,10 @@ export function AutoSaveIndicator() {
         </div>
         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {isAuthLoading && "Authenticating..."}
-          {!isAuthLoading && cloudStatus === "synced" && `Cloud sync on (${cloudDrawingCount}/6)`}
-          {!isAuthLoading && cloudStatus === "syncing" && "Cloud sync connecting"}
-          {!isAuthLoading && cloudStatus === "signed-out" && "Cloud sync off"}
-          {!isAuthLoading && cloudStatus === "error" && "Cloud sync error"}
-          {localOnlyDrawingCount > 0 && (
-            <div className="text-[9px] text-yellow-500/80 mt-1">
-              {localOnlyDrawingCount} drawing{localOnlyDrawingCount > 1 ? "s" : ""} local only
-            </div>
-          )}
+          {!isAuthLoading && cloudStatus === "synced" && `Cloud (${cloudDrawingCount}/6)`}
+          {!isAuthLoading && cloudStatus === "syncing" && "Connecting"}
+          {!isAuthLoading && cloudStatus === "signed-out" && "Cloud signed out"}
+          {!isAuthLoading && cloudStatus === "error" && "Sync error"}
         </div>
       </div>
     </div>

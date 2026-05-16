@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as drawings from "../drawings.js";
+import type * as genStorage from "../genStorage.js";
 import type * as http from "../http.js";
 import type * as users from "../users.js";
 
@@ -22,6 +23,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   drawings: typeof drawings;
+  genStorage: typeof genStorage;
   http: typeof http;
   users: typeof users;
 }>;
