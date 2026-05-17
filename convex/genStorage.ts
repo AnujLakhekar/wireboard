@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, internalMutation } from "./_generated/server";
+import { mutation, internalMutation, query } from "./_generated/server";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -79,5 +79,25 @@ export const deleteStorageFile = mutation({
       console.error("Failed to delete storage file:", error);
       return { ok: false, error: String(error) };
     }
+  },
+});
+
+export const getImagesByUser = query({
+  args: { author: v.id("users") },
+  handler: async (ctx, args) => {
+    // Queries the images table using your "by_owner" index
+    const images = await ctx.db
+      .query("images")
+      .withIndex("by_owner", (q) => q.eq("ownerId", args.author))
+      .order("desc") // Shows newest uploads first
+      .collect();
+
+    // Attach resolved storage URLs so the canvas can render them directly
+    return Promise.all(
+      images.map(async (img) => ({
+        ...img,
+        resolvedUrl: await ctx.storage.getUrl(img.storageId),
+      }))
+    );
   },
 });

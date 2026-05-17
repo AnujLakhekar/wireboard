@@ -1,12 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
-import { Stage, Layer, Rect, Circle, Text } from "react-konva";
-import { useEditorStore, CANVAS_PRESETS } from "../(store)/useEditor"; // Double check this path
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Stage,
+  Layer,
+  Rect,
+  Circle,
+  Text,
+  Image as KonvaImage,
+  Transformer,
+} from "react-konva";
+import { useEditorStore, CANVAS_PRESETS } from "../(store)/useEditor";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -22,11 +29,115 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Layout, Palette, FilePlus } from "lucide-react";
+import {
+  Plus,
+  Layout,
+  Palette,
+  FilePlus,
+  Layers,
+  Monitor,
+  Undo2,
+  Redo2,
+} from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { Layers, Monitor } from "lucide-react";
+import GradientText from "@/components/GradientText";
 
-// Local color choices for quick canvas background initialization
+const GRID_SIZE = 25;
+
+// --- INTERNAL COMPONENT: HISTORY CONTROLS ---
+function HistoryControls() {
+  const { undo, redo, past, future } = useEditorStore();
+
+  // Listen globally to Command/Control + Z or Y hooks
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [undo, redo]);
+
+  return (
+    <div className="flex items-center gap-1 border border-border rounded-md p-1 bg-background shadow-sm">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+        onClick={undo}
+        disabled={past.length === 0}
+        title="Undo (Ctrl+Z)"
+      >
+        <Undo2 className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+        onClick={redo}
+        disabled={future.length === 0}
+        title="Redo (Ctrl+Y)"
+      >
+        <Redo2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+const CanvasImageRenderer = ({
+  layer,
+  onDragActions,
+  onSelect,
+}: {
+  layer: any;
+  onDragActions: any;
+  onSelect: any;
+}) => {
+  const [imageElement, setImageElement] = useState<HTMLImageElement | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!layer.src) return;
+    const img = new window.Image();
+    img.src = layer.src;
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      setImageElement(img);
+    };
+  }, [layer.src]);
+
+  if (!imageElement) return null;
+
+  return (
+    <KonvaImage
+      image={imageElement}
+      x={layer.x}
+      y={layer.y}
+      width={layer.width}
+      height={layer.height}
+      rotation={layer.rotation}
+      id={layer.id}
+      name="selectable"
+      draggable
+      onClick={onSelect}
+      onTap={onSelect}
+      {...onDragActions}
+    />
+  );
+};
+
 const BG_COLOR_OPTIONS = [
   { name: "Pure White", value: "#ffffff" },
   { name: "Studio Gray", value: "#f3f4f6" },
@@ -35,15 +146,15 @@ const BG_COLOR_OPTIONS = [
 ];
 
 export function CanvasNewPageDialog() {
-  const { setPageSize, applyPreset, setCanvasBg } = useEditorStore();
+  const { setPageSize, applyPreset, setCanvasBg, createStage } =
+    useEditorStore();
 
-  // Local state to capture user choices before initializing the artboard
-  const [selectedPreset, setSelectedPreset] = useState<string>("instagram_post");
+  const [selectedPreset, setSelectedPreset] =
+    useState<string>("instagram_post");
   const [customWidth, setCustomWidth] = useState<number>(1080);
   const [customHeight, setCustomHeight] = useState<number>(1080);
   const [chosenBg, setChosenBg] = useState<string>("#ffffff");
 
-  // Handle automatic width/height scaling changes when a user changes presets
   const handlePresetChange = (value: string) => {
     setSelectedPreset(value);
     const target = CANVAS_PRESETS.find((p) => p.name === value);
@@ -55,7 +166,7 @@ export function CanvasNewPageDialog() {
 
   const handleCreateCanvas = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (selectedPreset === "custom") {
       setPageSize(customWidth, customHeight);
     } else {
@@ -63,46 +174,46 @@ export function CanvasNewPageDialog() {
     }
 
     setCanvasBg(chosenBg);
-    
-    console.log("Canvas initialized:", {
+    createStage({
       width: customWidth,
       height: customHeight,
       bgColor: chosenBg,
-      preset: selectedPreset,
     });
   };
 
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button size="sm" className="gap-1.5 bg-gray-900 hover:bg-gray-800 text-xs">
+        <Button size="sm" className="gap-1.5 text-xs">
           <Plus className="h-3.5 w-3.5" />
-          New Canvas
+          New art
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-md bg-white border border-gray-200">
+      <DialogContent className="sm:max-w-md bg-background border-border">
         <form onSubmit={handleCreateCanvas} className="space-y-5">
           <DialogHeader>
-            <DialogTitle className="text-sm font-bold flex items-center gap-2">
-              <FilePlus className="h-4 w-4 text-gray-500" />
+            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+              <FilePlus className="h-4 w-4 text-muted-foreground" />
               New art
             </DialogTitle>
-
           </DialogHeader>
 
-          {/* 1. Layout Preset Selection */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
               <Layout className="h-3 w-3" /> Size Preset
             </Label>
             <Select value={selectedPreset} onValueChange={handlePresetChange}>
-              <SelectTrigger className="w-full h-9 text-xs border-gray-200 bg-white">
+              <SelectTrigger className="w-full h-9 text-xs border-input bg-background">
                 <SelectValue placeholder="Choose Artboard Dimension Preset" />
               </SelectTrigger>
               <SelectContent>
                 {CANVAS_PRESETS.map((preset) => (
-                  <SelectItem key={preset.name} value={preset.name} className="text-xs">
+                  <SelectItem
+                    key={preset.name}
+                    value={preset.name}
+                    className="text-xs"
+                  >
                     {preset.label}
                   </SelectItem>
                 ))}
@@ -110,10 +221,12 @@ export function CanvasNewPageDialog() {
             </Select>
           </div>
 
-          {/* 2. Precision Manual Metric Overrides */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="canvas-width" className="text-xs font-semibold text-gray-500 font-mono">
+              <Label
+                htmlFor="canvas-width"
+                className="text-xs font-semibold text-muted-foreground font-mono"
+              >
                 Width (px)
               </Label>
               <Input
@@ -122,11 +235,14 @@ export function CanvasNewPageDialog() {
                 disabled={selectedPreset !== "custom"}
                 value={customWidth}
                 onChange={(e) => setCustomWidth(Number(e.target.value) || 100)}
-                className="h-9 text-xs border-gray-200 focus-visible:ring-1 focus-visible:ring-gray-400 disabled:opacity-60 disabled:bg-gray-50"
+                className="h-9 text-xs border-input"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="canvas-height" className="text-xs font-semibold text-gray-500 font-mono">
+              <Label
+                htmlFor="canvas-height"
+                className="text-xs font-semibold text-muted-foreground font-mono"
+              >
                 Height (px)
               </Label>
               <Input
@@ -135,14 +251,13 @@ export function CanvasNewPageDialog() {
                 disabled={selectedPreset !== "custom"}
                 value={customHeight}
                 onChange={(e) => setCustomHeight(Number(e.target.value) || 100)}
-                className="h-9 text-xs border-gray-200 focus-visible:ring-1 focus-visible:ring-gray-400 disabled:opacity-60 disabled:bg-gray-50"
+                className="h-9 text-xs border-input"
               />
             </div>
           </div>
 
-          {/* 3. Base Background Tone Selection */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+            <Label className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
               <Palette className="h-3 w-3" /> Canvas Background Color
             </Label>
             <div className="flex gap-2 items-center">
@@ -150,40 +265,40 @@ export function CanvasNewPageDialog() {
                 <button
                   key={color.value}
                   type="button"
-                  title={color.name}
                   onClick={() => setChosenBg(color.value)}
-                  className={`w-7 h-7 rounded-full border transition-all duration-150 ${
-                    chosenBg === color.value 
-                      ? "ring-2 ring-gray-900 ring-offset-2 scale-105 border-transparent" 
-                      : "border-gray-200 hover:scale-105"
+                  className={`w-7 h-7 rounded-full border transition-all ${
+                    chosenBg === color.value
+                      ? "ring-2 ring-ring ring-offset-2 scale-105"
+                      : "border-input"
                   }`}
                   style={{ backgroundColor: color.value }}
                 />
               ))}
-              
               <div className="flex-1 ml-2">
                 <Input
                   type="text"
                   maxLength={7}
                   value={chosenBg}
                   onChange={(e) => setChosenBg(e.target.value)}
-                  className="h-7 text-[11px] text-center font-mono uppercase border-gray-200 px-2"
-                  placeholder="#FFFFFF"
+                  className="h-7 text-[11px] text-center font-mono uppercase border-input"
                 />
               </div>
             </div>
           </div>
 
-          {/* Form Action Controls */}
           <DialogFooter className="pt-2 flex gap-2 sm:justify-end">
             <DialogClose asChild>
-              <Button type="button" variant="outline" size="sm" className="h-9 text-xs border-gray-200">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 text-xs"
+              >
                 Cancel
               </Button>
             </DialogClose>
-            
             <DialogClose asChild>
-              <Button type="submit" size="sm" className="h-9 text-xs bg-gray-900 hover:bg-gray-800 text-white">
+              <Button type="submit" size="sm" className="h-9 text-xs">
                 Generate Stage
               </Button>
             </DialogClose>
@@ -196,115 +311,310 @@ export function CanvasNewPageDialog() {
 
 export function EditorHeaderBar() {
   const { stages, activeStageId, setActiveStage, pageSize } = useEditorStore();
-
-  // Find the metadata of the currently selected stage
   const activeStage = stages.find((s) => s.id === activeStageId);
 
   return (
-    <header className="h-14 w-full bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-sm z-40 select-none">
-      
-      {/* Left Section: Active Project Stage Navigation */}
+    <header className="h-14 w-full bg-background border-b border-border px-6 flex items-center justify-between z-40 select-none">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">
-          <Layers className="h-4 w-4 text-gray-500" />
-          <span className="text-xs font-bold uppercase tracking-wider text-gray-400">
-            Workspace
+          <Layers className="h-4 w-4 text-muted-foreground" />
+          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+            wireboard
+            <GradientText
+              colors={["#5227FF", "#FF9FFC", "#B497CF"]}
+              animationSpeed={8}
+              showBorder={false}
+              className="custom-class"
+            >
+              Designer
+            </GradientText>
           </span>
         </div>
 
-        {stages.length > 0 ? (
+        {stages.length > 0 && (
           <div className="flex items-center gap-2">
-            <Label htmlFor="stage-selector" className="text-xs text-gray-500 font-medium">
-              Active Page:
+            <Label
+              htmlFor="stage-selector"
+              className="text-xs text-muted-foreground font-medium"
+            >
+              Page:
             </Label>
             <Select
               value={activeStageId || ""}
               onValueChange={(value) => setActiveStage(value)}
             >
-              <SelectTrigger id="stage-selector" className="w-44 h-8 text-xs border-gray-200 bg-gray-50/50 font-medium">
-                <SelectValue placeholder="No stages active" />
+              <SelectTrigger
+                id="stage-selector"
+                className="w-44 h-8 text-xs border-input bg-muted/50"
+              >
+                <SelectValue placeholder="Select Stage View" />
               </SelectTrigger>
               <SelectContent>
                 {stages.map((stage) => (
-                  <SelectItem key={stage.id} value={stage.id} className="text-xs">
+                  <SelectItem
+                    key={stage.id}
+                    value={stage.id}
+                    className="text-xs"
+                  >
                     {stage.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-        ) : (
-          <span className="text-xs text-gray-400 italic">No pages initialized yet</span>
         )}
       </div>
 
-      {/* Center Section: Live Coordinate/Resolution Readout */}
-      <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-gray-50 border border-gray-100 rounded-md text-[11px] font-mono text-gray-500">
-        <Monitor className="h-3 w-3 text-gray-400" />
-        <span>Canvas Bounds:</span>
-        <span className="font-bold text-gray-700">
-          {activeStage ? activeStage.width : pageSize.width}px
-        </span>
-        <span>×</span>
-        <span className="font-bold text-gray-700">
-          {activeStage ? activeStage.height : pageSize.height}px
-        </span>
+      {/* Center Action Zone: Dimensional Display + Integrated Undo/Redo Engine */}
+      <div className="flex items-center gap-4">
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-muted border border-border/50 rounded-md text-[11px] font-mono text-muted-foreground">
+          <Monitor className="h-3 w-3 text-muted-foreground/70" />
+          <span>Canvas</span>
+          <span className="font-bold text-foreground">
+            {activeStage ? activeStage.width : pageSize.width}px
+          </span>
+          <span>×</span>
+          <span className="font-bold text-foreground">
+            {activeStage ? activeStage.height : pageSize.height}px
+          </span>
+        </div>
+
+        <HistoryControls />
       </div>
 
-      {/* Right Section: Core Initialization Actions */}
       <div className="flex items-center gap-3">
-        {/* The Dialog button component we built earlier */}
         <CanvasNewPageDialog />
       </div>
     </header>
   );
 }
 
-
-
 const Editor = () => {
-  const { pageSize, canvasBg } = useEditorStore();
+  const {
+    pageSize,
+    stages,
+    activeStageId,
+    updateLayer,
+    selectedLayerId,
+    setSelectedLayerId,
+  } = useEditorStore();
+
+  const stageRef = useRef<any>(null);
+  const transformerRef = useRef<any>(null);
+
+  const currentStageInstance = stages.find((s) => s.id === activeStageId);
+
+  const displayWidth = currentStageInstance
+    ? currentStageInstance.width
+    : pageSize.width;
+  const displayHeight = currentStageInstance
+    ? currentStageInstance.height
+    : pageSize.height;
+  const displayBg = currentStageInstance
+    ? currentStageInstance.backgroundColor
+    : "#ffffff";
+
+  useEffect(() => {
+    if (!transformerRef.current || !stageRef.current) return;
+
+    if (!selectedLayerId) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer().batchDraw();
+      return;
+    }
+
+    const selectedNode = stageRef.current.findOne(`#${selectedLayerId}`);
+
+    if (selectedNode) {
+      transformerRef.current.nodes([selectedNode]);
+      transformerRef.current.getLayer().batchDraw();
+    } else {
+      transformerRef.current.nodes([]);
+    }
+  }, [selectedLayerId, currentStageInstance]);
+
+  const handleStageBackgroundClick = (e: any) => {
+    const clickedOnEmptySpace =
+      e.target === e.target.getStage() || e.target.name() === "background-base";
+    if (clickedOnEmptySpace) {
+      setSelectedLayerId(null);
+    }
+  };
 
   return (
-    <div className="flex-1 h-full bg-[#f3f4f6] overflow-auto relative flex flex-col items-center justify-center p-12 custom-grid-background">
-      
-      {/* Top Action Header Bar inside the viewport area */}
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2 bg-white/80 backdrop-blur p-1.5 rounded-lg border border-gray-200">
-        <CanvasNewPageDialog />
-      </div>
-
-      {/* Konva Viewport Boundary Container: 
-        Matches the layout bounds configured in the Zustand schema exactly.
-      */}
-      <div 
-        className="border border-gray-300/80 rounded-sm overflow-hidden bg-white"
-        style={{ width: `${pageSize.width}px`, height: `${pageSize.height}px` }}
+    <div className="flex-1 h-full bg-muted/40 overflow-auto relative flex flex-col items-center justify-center p-12 custom-grid-background">
+      <div
+        className="border border-border/80 rounded-sm overflow-hidden bg-background shadow-lg"
+        style={{ width: `${displayWidth}px`, height: `${displayHeight}px` }}
       >
-        <Stage width={pageSize.width} height={pageSize.height}>
-          <Layer>
-            {/* Base Background Fill Rect */}
-            <Rect
-              x={0}
-              y={0}
-              width={pageSize.width}
-              height={pageSize.height}
-              fill={canvasBg}
-            />
+        {currentStageInstance ? (
+          <Stage
+            width={displayWidth}
+            height={displayHeight}
+            ref={stageRef}
+            onMouseDown={handleStageBackgroundClick}
+            onTouchStart={handleStageBackgroundClick}
+          >
+            <Layer>
+              <Rect
+                name="background-base"
+                x={0}
+                y={0}
+                width={displayWidth}
+                height={displayHeight}
+                fill={displayBg}
+              />
 
-            {/* Placeholder Vector Graphic to test interactive layer rendering */}
-            <Circle x={pageSize.width / 2} y={pageSize.height / 2} radius={60} fill="#3b82f6" draggable />
-            
-            <Text
-              text="Drag Me or Use the Top-Right Action to Resize Artboard Stage"
-              x={40}
-              y={40}
-              fontSize={14}
-              fontFamily="sans-serif"
-              fill={canvasBg === "#111827" ? "#9ca3af" : "#4b5563"}
-              draggable
-            />
-          </Layer>
-        </Stage>
+              {currentStageInstance?.layers.map((layer) => {
+                const elementInteractionEvents = {
+                  onDragMove: (e: any) => {
+                    const target = e.target;
+                    // Local drag snapping layout alignment configurations
+                    const snappedX =
+                      Math.round(target.x() / GRID_SIZE) * GRID_SIZE;
+                    const snappedY =
+                      Math.round(target.y() / GRID_SIZE) * GRID_SIZE;
+
+                    target.x(snappedX);
+                    target.y(snappedY);
+                  },
+                  onDragEnd: (e: any) => {
+                    const target = e.target;
+                    // This updates store parameters once dragging stops entirely, preserving clean state histories
+                    updateLayer(layer.id, {
+                      x: target.x(),
+                      y: target.y(),
+                    });
+                  },
+                  onTransformEnd: (e: any) => {
+                    const target = e.target;
+                    const currentScaleX = target.scaleX();
+                    const currentScaleY = target.scaleY();
+
+                    target.scaleX(1);
+                    target.scaleY(1);
+
+                    updateLayer(layer.id, {
+                      x: target.x(),
+                      y: target.y(),
+                      width: Math.max(5, target.width() * currentScaleX),
+                      height: Math.max(5, target.height() * currentScaleY),
+                      rotation: target.rotation(),
+                    });
+                  },
+                };
+
+                const handleSelect = (e: any) => {
+                  e.cancelBubble = true;
+                  setSelectedLayerId(layer.id);
+                };
+
+                if (layer.type === "rect") {
+                  return (
+                    <Rect
+                      key={layer.id}
+                      id={layer.id}
+                      name="selectable"
+                      x={layer.x}
+                      y={layer.y}
+                      width={layer.width}
+                      height={layer.height}
+                      fill={layer.fill || "#3498db"}
+                      rotation={layer.rotation}
+                      draggable
+                      onClick={handleSelect}
+                      onTap={handleSelect}
+                      {...elementInteractionEvents}
+                    />
+                  );
+                }
+
+                if (layer.type === "circle") {
+                  return (
+                    <Circle
+                      key={layer.id}
+                      id={layer.id}
+                      name="selectable"
+                      x={layer.x}
+                      y={layer.y}
+                      radius={Math.min(layer.width, layer.height) / 2}
+                      fill={layer.fill || "#e74c3c"}
+                      rotation={layer.rotation}
+                      draggable
+                      onClick={handleSelect}
+                      onTap={handleSelect}
+                      {...elementInteractionEvents}
+                    />
+                  );
+                }
+
+                if (layer.type === "text") {
+                  const weightAsNumber = Number(layer.fontWeight || "400");
+                  const resolvedFontStyle =
+                    weightAsNumber >= 600 ? "bold" : "normal";
+                  return (
+                    <Text
+                      key={layer.id}
+                      id={layer.id}
+                      name="selectable"
+                      x={layer.x}
+                      y={layer.y}
+                      text={layer.text || "Sample Text"}
+                      fontSize={layer.fontSize || 24}
+                      fontFamily={layer.fontFamily || "sans-serif"}
+                      fontStyle={resolvedFontStyle}
+                      fill={layer.fill || "#2c3e50"}
+                      stroke={layer.stroke}
+                      strokeWidth={layer.strokeWidth || 0}
+                      align={layer.align || "left"}
+                      width={layer.width}
+                      rotation={layer.rotation}
+                      draggable
+                      onClick={handleSelect}
+                      onTap={handleSelect}
+                      {...elementInteractionEvents}
+                    />
+                  );
+                }
+
+                if (layer.type === "image") {
+                  return (
+                    <CanvasImageRenderer
+                      key={layer.id}
+                      layer={layer}
+                      onSelect={handleSelect}
+                      onDragActions={elementInteractionEvents}
+                    />
+                  );
+                }
+
+                return null;
+              })}
+
+              <Transformer
+                ref={transformerRef}
+                boundBoxFunc={(oldBox, newBox) => {
+                  if (newBox.width < 10 || newBox.height < 10) {
+                    return oldBox;
+                  }
+                  return newBox;
+                }}
+                anchorStyleFunc={(anchor) => {
+                  anchor.cornerRadius(50);
+                  anchor.fill("#ffffff");
+                  anchor.stroke("#2563eb");
+                  anchor.strokeWidth(2);
+                }}
+              />
+            </Layer>
+          </Stage>
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
+            <Layers className="h-8 w-8 text-muted-foreground/40 stroke-[1.5]" />
+            No active stage. Use the "New art" button to create your first
+            canvas.
+          </div>
+        )}
       </div>
     </div>
   );

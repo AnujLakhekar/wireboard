@@ -5,9 +5,10 @@ import { MdAddPhotoAlternate, MdDashboard, MdTextFields, MdCategory, MdBrush, Md
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useEditorStore } from '../(store)/useEditor';
+import { LayersIcon } from 'lucide-react';
 
 const ToolsSideBar = () => {
-  const [activeToolIndex, setActiveToolIndex] = useState(2); // photos is active by default
+  const [activeToolIndex, setActiveToolIndex] = useState(2); // Photos active by default
 
   const tools = [
     {
@@ -18,7 +19,7 @@ const ToolsSideBar = () => {
     {
       name: 'text',
       label: 'Text',
-      icon: MdTextFields ,
+      icon: MdTextFields,
     },
     {
       name: 'photos',
@@ -40,6 +41,11 @@ const ToolsSideBar = () => {
       label: 'Upload',
       icon: MdCloudUpload,
     },
+    {
+      name: 'layers',
+      label: 'Layers',
+      icon: LayersIcon,
+    },
   ];
 
   const { setSelectedTool } = useEditorStore();
@@ -49,9 +55,9 @@ const ToolsSideBar = () => {
   }, [activeToolIndex]);
 
   return (
-    <div className="flex flex-col h-full bg-muted/30 border-r border-border gap-2 p-2">
-      <TooltipProvider>
-        <div className="flex flex-col gap-1">
+    <aside className="flex flex-col h-full bg-background border-r border-border p-2 gap-2 select-none">
+      <TooltipProvider delayDuration={200}>
+        <div className="flex flex-col gap-1.5">
           {tools.map((tool, index) => {
             const IconComponent = tool.icon;
             const isActive = index === activeToolIndex;
@@ -63,13 +69,19 @@ const ToolsSideBar = () => {
                     variant={isActive ? "default" : "ghost"}
                     size="icon"
                     onClick={() => setActiveToolIndex(index)}
-                    className="h-10 w-10"
-                    title={tool.label}
+                    className={`h-10 w-10 transition-colors ${
+                      isActive 
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    }`}
                   >
-                    <IconComponent className="h-5 w-5" />
+                    <IconComponent className="h-5 w-5 pointer-events-none" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="right">
+                <TooltipContent 
+                  side="right" 
+                  className="border border-border bg-popover text-popover-foreground font-medium text-xs px-2.5 py-1"
+                >
                   {tool.label}
                 </TooltipContent>
               </Tooltip>
@@ -77,8 +89,8 @@ const ToolsSideBar = () => {
           })}
         </div>
       </TooltipProvider>
-    </div>
+    </aside>
   )
 }
 
-export default ToolsSideBar
+export default ToolsSideBar;
