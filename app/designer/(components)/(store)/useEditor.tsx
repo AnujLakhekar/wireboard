@@ -19,6 +19,8 @@ export interface CanvasLayer {
   rotation: number;
   zIndex: number;
   fontSize: number; // For text layers, default to 24px
+  visible?: boolean; // Layer visibility toggle
+  locked?: boolean; // Layer lock toggle
 }
 
 // 2. Strict Stage/Page Architecture
