@@ -19,13 +19,14 @@ const ObjectController = () => {
 
   useEffect(() => {
     if (!activeLayer) return;
-    const oldTool = selectedLayerId
     if (activeLayer.type === "text") {
       setSelectedTool("texteditor");
-    } else if (selectedLayerId) {
-      return;
+    } else if (activeLayer.type === "image") {
+      setSelectedTool("imageeditor");
+    } else {
+      setSelectedTool("templates");
     }
-  }, [activeLayer]);
+  }, [activeLayer, setSelectedTool]);
 
   // Derive panel visibility directly from state during render to avoid useEffect synchronization bugs
   const isOpen = !!activeLayer;

@@ -2,7 +2,12 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useEditorStore } from "../(store)/useEditor";
-import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+} from "@hello-pangea/dnd";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,33 +27,39 @@ import {
   Circle,
   Triangle,
   Star,
-  Zap,
-  Hexagon,
-  TrendingUp,
-  MoreVertical,
-  Copy,
-  Trash2,
-  Lock,
-  Unlock,
-  Eye,
-  EyeOff,
   GripVertical,
   Loader2,
   Upload,
   FileImage,
   ImageIcon,
+  Copy,
+  Image,
+  Eye,
+  EyeOff,
+  Lock,
+  Unlock,
+  MoreVertical,
+  Trash2,
+  Hexagon,
+  TrendingUp,
+  Zap,
 } from "lucide-react";
 
-import { 
-  AlignLeft, 
-  AlignCenter, 
-  AlignRight, 
-  Type, 
-  Pipette, 
+import {
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Type,
+  Pipette,
 } from "lucide-react";
 
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import {
+  DESIGNER_TEMPLATES,
+  DesignerTemplateLibrary,
+  materializeTemplateLayers,
+} from "@/components/designer-template-library";
 
 /* ==========================================
    TYPES & INTERFACES
@@ -77,18 +88,63 @@ interface UnsplashPhoto {
 /* ==========================================
    1. TEMPLATES PANEL
    ========================================== */
-export const TemplatesPanel = () => (
-  <div className="w-full h-full bg-background flex flex-col select-none">
-    <div className="py-3 px-4 border-b border-border/50">
-      <span className="text-xs text-muted-foreground font-medium tracking-wider uppercase">
-        Templates
-      </span>
-    </div>
-    <div className="p-4 text-xs font-medium text-muted-foreground">
-      Templates Panel Content
-    </div>
-  </div>
-);
+export const TemplatesPanel = () => {
+  const {
+    stages,
+    activeStageId,
+    createStage,
+    addLayerToActiveStage,
+    setCanvasBg,
+  } = useEditorStore();
+
+  const applyTemplate = useCallback(
+    (template: (typeof DESIGNER_TEMPLATES)[number]) => {
+      const hasActiveStage = Boolean(activeStageId && stages.length > 0);
+
+      if (!hasActiveStage) {
+        createStage({
+          width: template.canvas.width,
+          height: template.canvas.height,
+          bgColor: template.canvasBackground,
+        });
+        setCanvasBg(template.canvasBackground);
+      }
+
+      materializeTemplateLayers(template).forEach((layerBlueprint) => {
+        addLayerToActiveStage({
+          type: layerBlueprint.type,
+          x: layerBlueprint.x,
+          y: layerBlueprint.y,
+          width: layerBlueprint.width,
+          height: layerBlueprint.height,
+          fill: layerBlueprint.fill,
+          text: layerBlueprint.text,
+          fontSize: layerBlueprint.fontSize,
+          fontFamily: layerBlueprint.fontFamily,
+          fontWeight: layerBlueprint.fontWeight,
+          align: layerBlueprint.align,
+          stroke: layerBlueprint.stroke,
+          strokeWidth: layerBlueprint.strokeWidth,
+          rotation: layerBlueprint.rotation ?? 0,
+        });
+      });
+    },
+    [
+      activeStageId,
+      addLayerToActiveStage,
+      createStage,
+      setCanvasBg,
+      stages.length,
+    ],
+  );
+
+  return (
+    <DesignerTemplateLibrary
+      templates={DESIGNER_TEMPLATES}
+      onSelectTemplate={applyTemplate}
+    />
+  );
+};
 
 /* ==========================================
    2. TEXT PANEL (TYPOGRAPHY)
@@ -96,7 +152,7 @@ export const TemplatesPanel = () => (
 export const TextPanel = () => {
   const { pageSize, addLayerToActiveStage } = useEditorStore();
   const [textContent, setTextContent] = useState<string>("Heading Text");
-  
+
   const [settings, setSettings] = useState({
     x: 0,
     y: 0,
@@ -180,7 +236,9 @@ export const TextPanel = () => {
           <div className="grid grid-cols-2 gap-2">
             <select
               value={settings.font.fontFamily}
-              onChange={(e) => updateSetting("font", "fontFamily", e.target.value)}
+              onChange={(e) =>
+                updateSetting("font", "fontFamily", e.target.value)
+              }
               className="h-8 px-2 text-xs rounded-md border border-input bg-muted/20 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="sans-serif">Sans Serif</option>
@@ -203,10 +261,17 @@ export const TextPanel = () => {
           </div>
 
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-[11px] text-muted-foreground min-w-[50px]">Align</span>
+            <span className="text-[11px] text-muted-foreground min-w-[50px]">
+              Align
+            </span>
             <select
               value={settings.align}
-              onChange={(e) => setSettings((prev) => ({ ...prev, align: e.target.value as any }))}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  align: e.target.value as any,
+                }))
+              }
               className="h-8 px-2 text-xs rounded-md border border-input bg-muted/20 text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             >
               <option value="left">Left</option>
@@ -216,11 +281,19 @@ export const TextPanel = () => {
           </div>
 
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-[11px] text-muted-foreground min-w-[50px]">Size (px)</span>
+            <span className="text-[11px] text-muted-foreground min-w-[50px]">
+              Size (px)
+            </span>
             <Input
               type="number"
               value={settings.font.size}
-              onChange={(e) => updateSetting("font", "size", Math.max(1, parseInt(e.target.value) || 0))}
+              onChange={(e) =>
+                updateSetting(
+                  "font",
+                  "size",
+                  Math.max(1, parseInt(e.target.value) || 0),
+                )
+              }
               className="h-8 text-xs bg-muted/20 border-input w-20"
             />
           </div>
@@ -235,7 +308,9 @@ export const TextPanel = () => {
               <input
                 type="color"
                 value={settings.color.textCl}
-                onChange={(e) => updateSetting("color", "textCl", e.target.value)}
+                onChange={(e) =>
+                  updateSetting("color", "textCl", e.target.value)
+                }
                 className="absolute inset-0 w-full h-full scale-150 cursor-pointer p-0 border-none"
               />
             </div>
@@ -255,25 +330,37 @@ export const TextPanel = () => {
           </label>
           <div className="flex flex-col gap-2 border border-border/40 bg-muted/10 rounded-md p-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] text-muted-foreground">Thickness</span>
+              <span className="text-[11px] text-muted-foreground">
+                Thickness
+              </span>
               <Input
                 type="number"
                 value={settings.stroke.size}
-                onChange={(e) => updateSetting("stroke", "size", Math.max(0, parseInt(e.target.value) || 0))}
+                onChange={(e) =>
+                  updateSetting(
+                    "stroke",
+                    "size",
+                    Math.max(0, parseInt(e.target.value) || 0),
+                  )
+                }
                 className="h-7 text-xs bg-background border-input w-16"
                 min={0}
               />
             </div>
-            
+
             {settings.stroke.size > 0 && (
               <div className="flex items-center justify-between gap-2 transition-all">
-                <span className="text-[11px] text-muted-foreground">Stroke Color</span>
+                <span className="text-[11px] text-muted-foreground">
+                  Stroke Color
+                </span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   <div className="relative w-6 h-6 rounded border border-border/80 overflow-hidden">
                     <input
                       type="color"
                       value={settings.stroke.color}
-                      onChange={(e) => updateSetting("stroke", "color", e.target.value)}
+                      onChange={(e) =>
+                        updateSetting("stroke", "color", e.target.value)
+                      }
                       className="absolute inset-0 w-full h-full scale-150 cursor-pointer"
                     />
                   </div>
@@ -329,11 +416,11 @@ export const UploadPanel = () => {
   const generateUploadUrl = useMutation(api.genStorage.generateUploadUrl);
   const sendImage = useMutation(api.genStorage.sendImage);
   const getStorageUrl = useMutation(api.genStorage.getStorageUrl);
-  
+
   // Real-time reactive list of user files
   const userImages = useQuery(
-    api.genStorage.getImagesByUser, 
-    activeUserId ? { author: activeUserId } : "skip"
+    api.genStorage.getImagesByUser,
+    activeUserId ? { author: activeUserId } : "skip",
   );
 
   // 4. Inject existing asset directly into the Canvas workspace
@@ -432,7 +519,9 @@ export const UploadPanel = () => {
               <Upload className="h-4 w-4 text-muted-foreground" />
               <p className="text-xs font-semibold">Import localized media</p>
               {!activeUserId && (
-                <p className="text-[10px] text-destructive">Missing valid active user account context</p>
+                <p className="text-[10px] text-destructive">
+                  Missing valid active user account context
+                </p>
               )}
             </div>
           )}
@@ -448,13 +537,18 @@ export const UploadPanel = () => {
 
           {!userImages ? (
             <div className="flex items-center justify-center py-8 gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading cloud storage files...
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading cloud storage
+              files...
             </div>
           ) : userImages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 border border-dashed rounded-lg bg-muted/5 text-center px-4">
               <ImageIcon className="h-5 w-5 text-muted-foreground/60 mb-1" />
-              <p className="text-xs font-medium text-muted-foreground">No asset files found</p>
-              <p className="text-[10px] text-muted-foreground/60">Upload components above to fill workspace library.</p>
+              <p className="text-xs font-medium text-muted-foreground">
+                No asset files found
+              </p>
+              <p className="text-[10px] text-muted-foreground/60">
+                Upload components above to fill workspace library.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-2">
@@ -462,7 +556,9 @@ export const UploadPanel = () => {
                 <button
                   key={img._id}
                   type="button"
-                  onClick={() => img.resolvedUrl && handleInjectToCanvas(img.resolvedUrl)}
+                  onClick={() =>
+                    img.resolvedUrl && handleInjectToCanvas(img.resolvedUrl)
+                  }
                   className="group relative aspect-square bg-muted rounded-md border border-border/60 overflow-hidden hover:border-primary/70 transition-all cursor-pointer active:scale-95"
                   title="Click to insert onto stage"
                 >
@@ -498,20 +594,20 @@ export const UploadPanel = () => {
    5. LAYERS PANEL (INTERACTIVE WITH DND & SHADCN)
    ========================================== */
 export const LayersPanel = () => {
-  const { 
-    stages, 
-    activeStageId, 
-    selectedLayerId, 
+  const {
+    stages,
+    activeStageId,
+    selectedLayerId,
     setSelectedLayerId,
-    updateLayerOrder,       
-    modifyLayerProperties,  
-    deleteLayer,            
-    duplicateLayer          
+    updateLayerOrder,
+    modifyLayerProperties,
+    deleteLayer,
+    duplicateLayer,
   } = useEditorStore();
 
   const activeStage = stages.find((s) => s.id === activeStageId);
   const layers = activeStage?.layers ?? [];
-  
+
   // High z-index elements go to the top of the list layout visually
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
 
@@ -547,7 +643,7 @@ export const LayersPanel = () => {
 
   const onDragEnd = (result: DropResult) => {
     if (!result.destination || !updateLayerOrder) return;
-    
+
     const sourceIndex = result.source.index;
     const destinationIndex = result.destination.index;
     if (sourceIndex === destinationIndex) return;
@@ -567,7 +663,9 @@ export const LayersPanel = () => {
         <span className="text-xs text-muted-foreground font-medium tracking-wider uppercase">
           Layers
         </span>
-        <p className="text-muted-foreground text-xs font-semibold">{layers.length}</p>
+        <p className="text-muted-foreground text-xs font-semibold">
+          {layers.length}
+        </p>
       </div>
 
       {/* Layer List Container */}
@@ -580,13 +678,17 @@ export const LayersPanel = () => {
           <DragDropContext onDragEnd={onDragEnd}>
             <Droppable droppableId="layers-list">
               {(provided) => (
-                <div 
-                  {...provided.droppableProps} 
-                  ref={provided.innerRef} 
+                <div
+                  {...provided.droppableProps}
+                  ref={provided.innerRef}
                   className="p-2 space-y-1.5"
                 >
                   {sortedLayers.map((layer, index) => (
-                    <Draggable key={layer.id} draggableId={layer.id} index={index}>
+                    <Draggable
+                      key={layer.id}
+                      draggableId={layer.id}
+                      index={index}
+                    >
                       {(dragProvided, snapshot) => (
                         <div
                           ref={dragProvided.innerRef}
@@ -599,8 +701,8 @@ export const LayersPanel = () => {
                           } ${snapshot.isDragging ? "shadow-lg bg-background border-primary border-dashed z-50" : ""}`}
                         >
                           {/* Drag Handle */}
-                          <div 
-                            {...dragProvided.dragHandleProps} 
+                          <div
+                            {...dragProvided.dragHandleProps}
                             className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground rounded"
                           >
                             <GripVertical className="h-3.5 w-3.5 opacity-60" />
@@ -612,18 +714,31 @@ export const LayersPanel = () => {
                           </span>
 
                           {/* Layer Label */}
-                          <span className="flex-1 truncate">{getLayerLabel(layer)}</span>
+                          <span className="flex-1 truncate">
+                            {getLayerLabel(layer)}
+                          </span>
 
                           {/* Inline Controls */}
-                          <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                          <div
+                            className="flex items-center gap-0.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             {/* Visibility Toggle */}
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                              onClick={() => modifyLayerProperties?.(layer.id, { visible: !layer.visible })}
+                              onClick={() =>
+                                modifyLayerProperties?.(layer.id, {
+                                  visible: !layer.visible,
+                                })
+                              }
                             >
-                              {layer.visible !== false ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5 opacity-40" />}
+                              {layer.visible !== false ? (
+                                <Eye className="h-3.5 w-3.5" />
+                              ) : (
+                                <EyeOff className="h-3.5 w-3.5 opacity-40" />
+                              )}
                             </Button>
 
                             {/* Lock Toggle */}
@@ -631,23 +746,44 @@ export const LayersPanel = () => {
                               variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                              onClick={() => modifyLayerProperties?.(layer.id, { locked: !layer.locked })}
+                              onClick={() =>
+                                modifyLayerProperties?.(layer.id, {
+                                  locked: !layer.locked,
+                                })
+                              }
                             >
-                              {layer.locked ? <Lock className="h-3.5 w-3.5 text-destructive" /> : <Unlock className="h-3.5 w-3.5 opacity-40" />}
+                              {layer.locked ? (
+                                <Lock className="h-3.5 w-3.5 text-destructive" />
+                              ) : (
+                                <Unlock className="h-3.5 w-3.5 opacity-40" />
+                              )}
                             </Button>
 
                             {/* More Actions Context Menu */}
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                >
                                   <MoreVertical className="h-3.5 w-3.5" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-36 text-xs">
-                                <DropdownMenuItem className="gap-2" onClick={() => duplicateLayer?.(layer.id)}>
+                              <DropdownMenuContent
+                                align="end"
+                                className="w-36 text-xs"
+                              >
+                                <DropdownMenuItem
+                                  className="gap-2"
+                                  onClick={() => duplicateLayer?.(layer.id)}
+                                >
                                   <Copy className="h-3.5 w-3.5" /> Duplicate
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => deleteLayer?.(layer.id)}>
+                                <DropdownMenuItem
+                                  className="gap-2 text-destructive focus:text-destructive focus:bg-destructive/10"
+                                  onClick={() => deleteLayer?.(layer.id)}
+                                >
                                   <Trash2 className="h-3.5 w-3.5" /> Delete
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -810,7 +946,9 @@ export const ElementsPanel = () => {
         <span className="text-xs text-muted-foreground font-medium tracking-wider uppercase">
           Geometry Layouts
         </span>
-        <p className="text-muted-foreground text-xs font-semibold text-primary">Vectors</p>
+        <p className="text-muted-foreground text-xs font-semibold text-primary">
+          Vectors
+        </p>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5 custom-scrollbar">
@@ -857,42 +995,45 @@ export const PhotosPanel = () => {
     orientation: null,
   });
 
-  const fetchUnsplashPhotos = useCallback(async (
-    query: string,
-    currentFilters: FilterState,
-    shouldSetState: boolean = true,
-  ): Promise<UnsplashPhoto[] | null> => {
-    if (selectedTool !== "photos") return null;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/unplash", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          search: query,
-          filters: {
-            color: currentFilters.color,
-            orientation: currentFilters.orientation,
-          },
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to pull matching dataset");
-      const data = await res.json();
-      const normalizedData = Array.isArray(data) ? data : [];
-      if (shouldSetState) {
-        setImages(normalizedData);
+  const fetchUnsplashPhotos = useCallback(
+    async (
+      query: string,
+      currentFilters: FilterState,
+      shouldSetState: boolean = true,
+    ): Promise<UnsplashPhoto[] | null> => {
+      if (selectedTool !== "photos") return null;
+      setLoading(true);
+      try {
+        const res = await fetch("/api/unplash", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            search: query,
+            filters: {
+              color: currentFilters.color,
+              orientation: currentFilters.orientation,
+            },
+          }),
+        });
+        if (!res.ok) throw new Error("Failed to pull matching dataset");
+        const data = await res.json();
+        const normalizedData = Array.isArray(data) ? data : [];
+        if (shouldSetState) {
+          setImages(normalizedData);
+        }
+        return normalizedData;
+      } catch (error) {
+        console.error("Error fetching photos:", error);
+        if (shouldSetState) {
+          setImages([]);
+        }
+        return [];
+      } finally {
+        setLoading(false);
       }
-      return normalizedData;
-    } catch (error) {
-      console.error("Error fetching photos:", error);
-      if (shouldSetState) {
-        setImages([]);
-      }
-      return [];
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedTool]);
+    },
+    [selectedTool],
+  );
 
   useEffect(() => {
     if (selectedTool === "photos") {
@@ -979,17 +1120,39 @@ export const PhotosPanel = () => {
               align="start"
               className="w-40 text-xs border-border bg-popover text-popover-foreground"
             >
-              <DropdownMenuItem onClick={() => updateFilter("orientation", null)} className="flex items-center justify-between">
-                All Orientations {!filters.orientation && <Check className="h-3 w-3" />}
+              <DropdownMenuItem
+                onClick={() => updateFilter("orientation", null)}
+                className="flex items-center justify-between"
+              >
+                All Orientations{" "}
+                {!filters.orientation && <Check className="h-3 w-3" />}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateFilter("orientation", "landscape")} className="flex items-center justify-between">
-                Landscape {filters.orientation === "landscape" && <Check className="h-3 w-3" />}
+              <DropdownMenuItem
+                onClick={() => updateFilter("orientation", "landscape")}
+                className="flex items-center justify-between"
+              >
+                Landscape{" "}
+                {filters.orientation === "landscape" && (
+                  <Check className="h-3 w-3" />
+                )}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateFilter("orientation", "portrait")} className="flex items-center justify-between">
-                Portrait {filters.orientation === "portrait" && <Check className="h-3 w-3" />}
+              <DropdownMenuItem
+                onClick={() => updateFilter("orientation", "portrait")}
+                className="flex items-center justify-between"
+              >
+                Portrait{" "}
+                {filters.orientation === "portrait" && (
+                  <Check className="h-3 w-3" />
+                )}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => updateFilter("orientation", "squarish")} className="flex items-center justify-between">
-                Square {filters.orientation === "squarish" && <Check className="h-3 w-3" />}
+              <DropdownMenuItem
+                onClick={() => updateFilter("orientation", "squarish")}
+                className="flex items-center justify-between"
+              >
+                Square{" "}
+                {filters.orientation === "squarish" && (
+                  <Check className="h-3 w-3" />
+                )}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1002,26 +1165,41 @@ export const PhotosPanel = () => {
                 className="h-7 text-[11px] flex-1 border-input gap-1 text-muted-foreground hover:text-foreground capitalize"
               >
                 <Sliders className="h-3 w-3" />
-                {filters.color ? `${filters.color.replace(/_/g, " ")}` : "Color"}
+                {filters.color
+                  ? `${filters.color.replace(/_/g, " ")}`
+                  : "Color"}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
               className="w-40 text-xs border-border bg-popover text-popover-foreground max-h-60 overflow-y-auto custom-scrollbar"
             >
-              <DropdownMenuItem onClick={() => updateFilter("color", null)} className="flex items-center justify-between">
+              <DropdownMenuItem
+                onClick={() => updateFilter("color", null)}
+                className="flex items-center justify-between"
+              >
                 Any Color {!filters.color && <Check className="h-3 w-3" />}
               </DropdownMenuItem>
               {[
-                "black_and_white", "black", "white", "yellow", "orange", 
-                "red", "purple", "magenta", "green", "teal", "blue"
+                "black_and_white",
+                "black",
+                "white",
+                "yellow",
+                "orange",
+                "red",
+                "purple",
+                "magenta",
+                "green",
+                "teal",
+                "blue",
               ].map((c) => (
                 <DropdownMenuItem
                   key={c}
                   onClick={() => updateFilter("color", c)}
                   className="flex items-center justify-between capitalize"
                 >
-                  {c.replace(/_/g, " ")} {filters.color === c && <Check className="h-3 w-3" />}
+                  {c.replace(/_/g, " ")}{" "}
+                  {filters.color === c && <Check className="h-3 w-3" />}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -1074,7 +1252,7 @@ const FONT_FAMILIES = [
   { label: "Serif (Merriweather)", value: "Merriweather, serif" },
   { label: "Display (Oswald)", value: "Oswald, sans-serif" },
   { label: "Monospace (Fira Code)", value: "Fira Code, monospace" },
-  { label: "Traditional Folk (Cinzel)", value: "Cinzel, serif" }
+  { label: "Traditional Folk (Cinzel)", value: "Cinzel, serif" },
 ];
 
 const FONT_WEIGHTS = [
@@ -1082,14 +1260,17 @@ const FONT_WEIGHTS = [
   { label: "Regular", value: "400" },
   { label: "Medium", value: "500" },
   { label: "Bold", value: "700" },
-  { label: "Black", value: "900" }
+  { label: "Black", value: "900" },
 ];
 
 export const TextEditorPanel = () => {
-  const { selectedLayerId, stages, activeStageId, modifyLayerProperties } = useEditorStore();
-  
+  const { selectedLayerId, stages, activeStageId, modifyLayerProperties } =
+    useEditorStore();
+
   const activeStage = stages.find((s) => s.id === activeStageId);
-  const selectedLayer = activeStage?.layers.find((l) => l.id === selectedLayerId);
+  const selectedLayer = activeStage?.layers.find(
+    (l) => l.id === selectedLayerId,
+  );
 
   const [localText, setLocalText] = useState<string>("");
 
@@ -1122,22 +1303,30 @@ export const TextEditorPanel = () => {
 
   return (
     <div className="w-full h-full bg-background flex flex-col select-none overflow-y-auto border-l border-border/40">
-      
       {/* Header Meta Info */}
       <div className="py-3 px-4 flex items-center justify-between border-b border-border/50 bg-muted/5">
         <span className="text-xs text-muted-foreground font-semibold tracking-wider uppercase">
           Typography Inspector
         </span>
-        
+
         {/* Absolute Canvas Toggles (Visibility & Interaction Locking) */}
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => updateProperty("visible", selectedLayer.visible !== false ? false : true)}
+            onClick={() =>
+              updateProperty(
+                "visible",
+                selectedLayer.visible !== false ? false : true,
+              )
+            }
             className={`p-1.5 rounded transition-colors cursor-pointer ${selectedLayer.visible === false ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:bg-muted"}`}
             title="Toggle Visibility"
           >
-            {selectedLayer.visible === false ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {selectedLayer.visible === false ? (
+              <EyeOff className="h-3.5 w-3.5" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
           </button>
           <button
             type="button"
@@ -1145,16 +1334,21 @@ export const TextEditorPanel = () => {
             className={`p-1.5 rounded transition-colors cursor-pointer ${selectedLayer.locked ? "text-amber-500 hover:bg-amber-500/10" : "text-muted-foreground hover:bg-muted"}`}
             title="Lock Layer Layout"
           >
-            {selectedLayer.locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+            {selectedLayer.locked ? (
+              <Lock className="h-3.5 w-3.5" />
+            ) : (
+              <Unlock className="h-3.5 w-3.5" />
+            )}
           </button>
         </div>
       </div>
 
       <div className="p-4 flex flex-col gap-5">
-        
         {/* Raw Text String Buffer Textarea */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Content String</label>
+          <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+            Content String
+          </label>
           <textarea
             value={localText}
             onChange={handleTextChange}
@@ -1169,7 +1363,9 @@ export const TextEditorPanel = () => {
         {/* Font Family & Core Styling Weight Matrices */}
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Font Family</label>
+            <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+              Font Family
+            </label>
             <select
               value={selectedLayer.fontFamily || "Inter, sans-serif"}
               onChange={(e) => updateProperty("fontFamily", e.target.value)}
@@ -1177,14 +1373,18 @@ export const TextEditorPanel = () => {
               className="w-full bg-muted/20 border border-border rounded-md px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
             >
               {FONT_FAMILIES.map((font) => (
-                <option key={font.value} value={font.value}>{font.label}</option>
+                <option key={font.value} value={font.value}>
+                  {font.label}
+                </option>
               ))}
             </select>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Font Weight</label>
+              <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+                Font Weight
+              </label>
               <select
                 value={selectedLayer.fontWeight || "400"}
                 onChange={(e) => updateProperty("fontWeight", e.target.value)}
@@ -1192,24 +1392,35 @@ export const TextEditorPanel = () => {
                 className="w-full bg-muted/20 border border-border rounded-md px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
               >
                 {FONT_WEIGHTS.map((weight) => (
-                  <option key={weight.value} value={weight.value}>{weight.label}</option>
+                  <option key={weight.value} value={weight.value}>
+                    {weight.label}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Font Size</label>
+              <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+                Font Size
+              </label>
               <div className="relative flex items-center">
                 <input
                   type="number"
                   min={4}
                   max={240}
                   value={selectedLayer.fontSize || 24}
-                  onChange={(e) => updateProperty("fontSize", Math.max(4, Number(e.target.value)))}
+                  onChange={(e) =>
+                    updateProperty(
+                      "fontSize",
+                      Math.max(4, Number(e.target.value)),
+                    )
+                  }
                   disabled={selectedLayer.locked}
                   className="w-full bg-muted/20 border border-border rounded-md pl-2 pr-7 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
                 />
-                <span className="absolute right-2 text-[10px] font-medium text-muted-foreground select-none pointer-events-none">PX</span>
+                <span className="absolute right-2 text-[10px] font-medium text-muted-foreground select-none pointer-events-none">
+                  PX
+                </span>
               </div>
             </div>
           </div>
@@ -1219,10 +1430,17 @@ export const TextEditorPanel = () => {
 
         {/* Alignment Segment Blocks Controls */}
         <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Text Alignment Layout</label>
+          <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+            Text Alignment Layout
+          </label>
           <div className="grid grid-cols-3 border border-border rounded-md overflow-hidden bg-muted/10 p-0.5">
             {(["left", "center", "right"] as const).map((alignMode) => {
-              const Icon = alignMode === "left" ? AlignLeft : alignMode === "center" ? AlignCenter : AlignRight;
+              const Icon =
+                alignMode === "left"
+                  ? AlignLeft
+                  : alignMode === "center"
+                    ? AlignCenter
+                    : AlignRight;
               return (
                 <button
                   key={alignMode}
@@ -1251,8 +1469,12 @@ export const TextEditorPanel = () => {
             <div className="flex items-center gap-2">
               <Pipette className="h-3.5 w-3.5 text-muted-foreground" />
               <div className="flex flex-col">
-                <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Color Fill</span>
-                <span className="text-[10px] font-mono text-foreground uppercase">{selectedLayer.fill || "#000000"}</span>
+                <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+                  Color Fill
+                </span>
+                <span className="text-[10px] font-mono text-foreground uppercase">
+                  {selectedLayer.fill || "#000000"}
+                </span>
               </div>
             </div>
             <input
@@ -1267,7 +1489,9 @@ export const TextEditorPanel = () => {
           {/* Stroke Vector Outline System */}
           <div className="flex flex-col gap-2 border border-border/40 rounded-lg p-2 bg-muted/5">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Outline Stroke</span>
+              <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+                Outline Stroke
+              </span>
               <input
                 type="color"
                 value={selectedLayer.stroke || "#ffffff"}
@@ -1278,14 +1502,18 @@ export const TextEditorPanel = () => {
             </div>
 
             <div className="flex items-center gap-2 mt-1">
-              <span className="text-[10px] font-medium text-muted-foreground shrink-0 w-12">Weight</span>
+              <span className="text-[10px] font-medium text-muted-foreground shrink-0 w-12">
+                Weight
+              </span>
               <input
                 type="range"
                 min={0}
                 max={12}
                 step={0.5}
                 value={selectedLayer.strokeWidth || 0}
-                onChange={(e) => updateProperty("strokeWidth", Number(e.target.value))}
+                onChange={(e) =>
+                  updateProperty("strokeWidth", Number(e.target.value))
+                }
                 disabled={selectedLayer.locked}
                 className="w-full accent-primary h-1 bg-muted rounded-lg cursor-pointer disabled:opacity-50"
               />
@@ -1295,12 +1523,21 @@ export const TextEditorPanel = () => {
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );
 };
 
+function PhotoEditorPanel() {
+  return (
+    <div className="w-full h-full flex items-center justify-center text-center p-6 text-xs text-muted-foreground bg-background select-none">
+      <Image className="h-8 w-8 mb-2 text-muted-foreground/40 stroke-[1.5]" />
+      Photo editing tools coming soon! In the meantime, try applying filters and
+      adjustments to your images using external software before uploading them
+      to the canvas.
+    </div>
+  );
+}
 
 /* ==========================================
    PARENT STRUCTURAL COMPONENT (IN-FLOW LAYOUT)
@@ -1318,6 +1555,7 @@ const SelectedToolPanel = () => {
     upload: UploadPanel,
     layers: LayersPanel,
     texteditor: TextEditorPanel,
+    photoeditor: PhotoEditorPanel,
   };
 
   const ActivePanelComponent = panelMap[selectedTool];
@@ -1336,7 +1574,9 @@ const SelectedToolPanel = () => {
         {ActivePanelComponent ? (
           <ActivePanelComponent />
         ) : (
-          <div className="p-4 text-xs text-muted-foreground">Select a tool from the sidebar</div>
+          <div className="p-4 text-xs text-muted-foreground">
+            Select a tool from the sidebar
+          </div>
         )}
       </div>
 
