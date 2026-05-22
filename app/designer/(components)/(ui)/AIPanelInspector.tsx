@@ -67,12 +67,12 @@ export const AgentInstructions = memo(({ className, children, ...props }: AgentI
   </div>
 ));
 
-export type AgentToolsProps = Omit<ComponentProps<typeof Accordion>, "type">;
+export type AgentToolsProps = ComponentProps<typeof Accordion>;
 
 export const AgentTools = memo(({ className, ...props }: AgentToolsProps) => (
   <div className={cn("space-y-2", className)}>
     <span className="font-medium text-muted-foreground text-xs uppercase tracking-wider">Tools Input Spec</span>
-    <Accordion className="rounded-md border border-border/50 bg-background/50" type="multiple" {...props} />
+    <Accordion className="rounded-md border border-border/50 bg-background/50" {...props} />
   </div>
 ));
 
