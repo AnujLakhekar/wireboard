@@ -67,7 +67,7 @@ export const AgentInstructions = memo(({ className, children, ...props }: AgentI
   </div>
 ));
 
-export type AgentToolsProps = ComponentProps<typeof Accordion>;
+export type AgentToolsProps = Omit<ComponentProps<typeof Accordion>, "type">;
 
 export const AgentTools = memo(({ className, ...props }: AgentToolsProps) => (
   <div className={cn("space-y-2", className)}>
