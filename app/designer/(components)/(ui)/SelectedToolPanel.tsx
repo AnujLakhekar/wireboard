@@ -38,6 +38,15 @@ import {
   FileImage,
   ImageIcon,
 } from "lucide-react";
+
+import { 
+  AlignLeft, 
+  AlignCenter, 
+  AlignRight, 
+  Type, 
+  Pipette, 
+} from "lucide-react";
+
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 
@@ -1059,6 +1068,240 @@ export const PhotosPanel = () => {
   );
 };
 
+// Standard web-safe & creative design system font stack
+const FONT_FAMILIES = [
+  { label: "Sans Serif (Inter)", value: "Inter, sans-serif" },
+  { label: "Serif (Merriweather)", value: "Merriweather, serif" },
+  { label: "Display (Oswald)", value: "Oswald, sans-serif" },
+  { label: "Monospace (Fira Code)", value: "Fira Code, monospace" },
+  { label: "Traditional Folk (Cinzel)", value: "Cinzel, serif" }
+];
+
+const FONT_WEIGHTS = [
+  { label: "Light", value: "300" },
+  { label: "Regular", value: "400" },
+  { label: "Medium", value: "500" },
+  { label: "Bold", value: "700" },
+  { label: "Black", value: "900" }
+];
+
+export const TextEditorPanel = () => {
+  const { selectedLayerId, stages, activeStageId, modifyLayerProperties } = useEditorStore();
+  
+  const activeStage = stages.find((s) => s.id === activeStageId);
+  const selectedLayer = activeStage?.layers.find((l) => l.id === selectedLayerId);
+
+  const [localText, setLocalText] = useState<string>("");
+
+  // Sync internal text state with out-of-band state mutations securely
+  useEffect(() => {
+    if (selectedLayer && selectedLayer.type === "text") {
+      setLocalText(selectedLayer.text || "");
+    }
+  }, [selectedLayerId, selectedLayer?.text]);
+
+  if (!selectedLayer || selectedLayer.type !== "text") {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center text-center p-6 text-xs text-muted-foreground bg-background select-none">
+        <Type className="h-8 w-8 mb-2 text-muted-foreground/40 stroke-[1.5]" />
+        Select a typography layer on the canvas to configure styling properties.
+      </div>
+    );
+  }
+
+  // Universal updater pipeline for all CanvasLayer properties
+  const updateProperty = (key: string, value: any) => {
+    if (!selectedLayerId || !modifyLayerProperties) return;
+    modifyLayerProperties(selectedLayerId, { [key]: value });
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setLocalText(e.target.value);
+    updateProperty("text", e.target.value);
+  };
+
+  return (
+    <div className="w-full h-full bg-background flex flex-col select-none overflow-y-auto border-l border-border/40">
+      
+      {/* Header Meta Info */}
+      <div className="py-3 px-4 flex items-center justify-between border-b border-border/50 bg-muted/5">
+        <span className="text-xs text-muted-foreground font-semibold tracking-wider uppercase">
+          Typography Inspector
+        </span>
+        
+        {/* Absolute Canvas Toggles (Visibility & Interaction Locking) */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => updateProperty("visible", selectedLayer.visible !== false ? false : true)}
+            className={`p-1.5 rounded transition-colors cursor-pointer ${selectedLayer.visible === false ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:bg-muted"}`}
+            title="Toggle Visibility"
+          >
+            {selectedLayer.visible === false ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => updateProperty("locked", !selectedLayer.locked)}
+            className={`p-1.5 rounded transition-colors cursor-pointer ${selectedLayer.locked ? "text-amber-500 hover:bg-amber-500/10" : "text-muted-foreground hover:bg-muted"}`}
+            title="Lock Layer Layout"
+          >
+            {selectedLayer.locked ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 flex flex-col gap-5">
+        
+        {/* Raw Text String Buffer Textarea */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Content String</label>
+          <textarea
+            value={localText}
+            onChange={handleTextChange}
+            placeholder="Enter custom typography path..."
+            disabled={selectedLayer.locked}
+            className="w-full h-20 resize-none bg-muted/10 border border-border rounded-md p-2.5 text-xs text-foreground focus:outline-none focus:border-primary/60 transition-all leading-normal disabled:opacity-50"
+          />
+        </div>
+
+        <hr className="border-border/40" />
+
+        {/* Font Family & Core Styling Weight Matrices */}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Font Family</label>
+            <select
+              value={selectedLayer.fontFamily || "Inter, sans-serif"}
+              onChange={(e) => updateProperty("fontFamily", e.target.value)}
+              disabled={selectedLayer.locked}
+              className="w-full bg-muted/20 border border-border rounded-md px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
+            >
+              {FONT_FAMILIES.map((font) => (
+                <option key={font.value} value={font.value}>{font.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Font Weight</label>
+              <select
+                value={selectedLayer.fontWeight || "400"}
+                onChange={(e) => updateProperty("fontWeight", e.target.value)}
+                disabled={selectedLayer.locked}
+                className="w-full bg-muted/20 border border-border rounded-md px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
+              >
+                {FONT_WEIGHTS.map((weight) => (
+                  <option key={weight.value} value={weight.value}>{weight.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Font Size</label>
+              <div className="relative flex items-center">
+                <input
+                  type="number"
+                  min={4}
+                  max={240}
+                  value={selectedLayer.fontSize || 24}
+                  onChange={(e) => updateProperty("fontSize", Math.max(4, Number(e.target.value)))}
+                  disabled={selectedLayer.locked}
+                  className="w-full bg-muted/20 border border-border rounded-md pl-2 pr-7 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary/60 disabled:opacity-50"
+                />
+                <span className="absolute right-2 text-[10px] font-medium text-muted-foreground select-none pointer-events-none">PX</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr className="border-border/40" />
+
+        {/* Alignment Segment Blocks Controls */}
+        <div className="flex flex-col gap-1.5">
+          <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Text Alignment Layout</label>
+          <div className="grid grid-cols-3 border border-border rounded-md overflow-hidden bg-muted/10 p-0.5">
+            {(["left", "center", "right"] as const).map((alignMode) => {
+              const Icon = alignMode === "left" ? AlignLeft : alignMode === "center" ? AlignCenter : AlignRight;
+              return (
+                <button
+                  key={alignMode}
+                  type="button"
+                  disabled={selectedLayer.locked}
+                  onClick={() => updateProperty("align", alignMode)}
+                  className={`flex items-center justify-center py-1 rounded cursor-pointer transition-all disabled:opacity-50 ${
+                    (selectedLayer.align || "left") === alignMode
+                      ? "bg-background text-foreground shadow-sm font-semibold border border-border/40"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <hr className="border-border/40" />
+
+        {/* Color Fills & Geometric Core Outlines */}
+        <div className="flex flex-col gap-3">
+          {/* Solid Vector Color Fill picker */}
+          <div className="flex items-center justify-between border border-border/40 bg-muted/5 rounded-lg p-2">
+            <div className="flex items-center gap-2">
+              <Pipette className="h-3.5 w-3.5 text-muted-foreground" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Color Fill</span>
+                <span className="text-[10px] font-mono text-foreground uppercase">{selectedLayer.fill || "#000000"}</span>
+              </div>
+            </div>
+            <input
+              type="color"
+              value={selectedLayer.fill || "#000000"}
+              onChange={(e) => updateProperty("fill", e.target.value)}
+              disabled={selectedLayer.locked}
+              className="w-7 h-7 bg-transparent border-0 cursor-pointer rounded-md overflow-hidden disabled:opacity-50"
+            />
+          </div>
+
+          {/* Stroke Vector Outline System */}
+          <div className="flex flex-col gap-2 border border-border/40 rounded-lg p-2 bg-muted/5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">Outline Stroke</span>
+              <input
+                type="color"
+                value={selectedLayer.stroke || "#ffffff"}
+                onChange={(e) => updateProperty("stroke", e.target.value)}
+                disabled={selectedLayer.locked}
+                className="w-6 h-6 bg-transparent border-0 cursor-pointer rounded overflow-hidden disabled:opacity-50"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[10px] font-medium text-muted-foreground shrink-0 w-12">Weight</span>
+              <input
+                type="range"
+                min={0}
+                max={12}
+                step={0.5}
+                value={selectedLayer.strokeWidth || 0}
+                onChange={(e) => updateProperty("strokeWidth", Number(e.target.value))}
+                disabled={selectedLayer.locked}
+                className="w-full accent-primary h-1 bg-muted rounded-lg cursor-pointer disabled:opacity-50"
+              />
+              <span className="text-[10px] font-mono w-6 text-right font-medium text-foreground">
+                {selectedLayer.strokeWidth || 0}
+              </span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+
 /* ==========================================
    PARENT STRUCTURAL COMPONENT (IN-FLOW LAYOUT)
    ========================================== */
@@ -1074,6 +1317,7 @@ const SelectedToolPanel = () => {
     draw: DrawPanel,
     upload: UploadPanel,
     layers: LayersPanel,
+    texteditor: TextEditorPanel,
   };
 
   const ActivePanelComponent = panelMap[selectedTool];

@@ -105,6 +105,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Editor from "@monaco-editor/react";
 import { useGSAP } from "@gsap/react";
 import gsap from "gsap";
+import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import ProfileMenu from "@/components/ProfileMenu";
 
@@ -1638,7 +1639,7 @@ function Canvas({
       await sendImage({ storageId, author: user._id });
     } catch (err) {
       console.error("Media file upload error:", err);
-      window.alert("Failed to upload image. Please try again.");
+      toast.error("Failed to upload image. Please try again.");
     } finally {
       event.target.value = "";
     }
@@ -1652,7 +1653,7 @@ function Canvas({
     try {
       normalizedSource = new URL(normalizedSource).toString();
     } catch {
-      window.alert("Please enter a valid URL.");
+      toast.error("Please enter a valid URL.");
       return;
     }
 
@@ -1684,7 +1685,7 @@ function Canvas({
     };
 
     image.onerror = () => {
-      window.alert("Could not load image from this URL.");
+      toast.error("Could not load image from this URL.");
     };
 
     image.src = normalizedSource;
@@ -1700,7 +1701,7 @@ function Canvas({
     try {
       normalizedSource = new URL(normalizedSource).toString();
     } catch {
-      window.alert("Please enter a valid URL.");
+      toast.error("Please enter a valid URL.");
       return;
     }
 
@@ -1724,7 +1725,7 @@ function Canvas({
     };
 
     image.onerror = () => {
-      window.alert("Could not load image from this URL.");
+      toast.error("Could not load image from this URL.");
     };
 
     image.src = normalizedSource;
@@ -1946,7 +1947,7 @@ function Canvas({
       addImageFromUrl(resolvedImageUrl, undefined, storageId);
     } catch (err) {
       console.error("Image upload error:", err);
-      window.alert("Failed to upload image. Please try again.");
+      toast.error("Failed to upload image. Please try again.");
     } finally {
       event.target.value = "";
     }
@@ -1995,8 +1996,9 @@ function Canvas({
         const resolvedImageUrl = imageUrl;
         addImageFromUrl(resolvedImageUrl, pointer, storageId);
       } catch (err) {
-        console.error("Drop upload error:", err);
-      }
+          console.error("Drop upload error:", err);
+          toast.error("Failed to upload image. Please try again.");
+        }
       return;
     }
 

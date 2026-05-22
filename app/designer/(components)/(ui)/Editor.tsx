@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, RefObject } from "react";
 import {
   Stage,
   Layer,
@@ -38,9 +38,27 @@ import {
   Monitor,
   Undo2,
   Redo2,
+  FileCode,
+  Printer,
+  FileImage,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import GradientText from "@/components/GradientText";
+import { useShiftKey } from "@/hooks/useShiftKey";
+import { calculateSnappingGuides } from "@/utills/snapping";
+import { exportCanvasWorkspace } from "@/utills/exportEngine";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { BsFiletypeJpg, BsFiletypePdf, BsFiletypePng } from "react-icons/bs";
+import { toast } from "sonner";
+import ProfileMenu from "@/components/ProfileMenu";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 const GRID_SIZE = 25;
 
@@ -309,9 +327,28 @@ export function CanvasNewPageDialog() {
   );
 }
 
-export function EditorHeaderBar() {
-  const { stages, activeStageId, setActiveStage, pageSize } = useEditorStore();
+interface EditorHeaderBarProps {
+  canvasInstanceRef: RefObject<any>;
+}
+
+export function EditorHeaderBar({ canvasInstanceRef }: EditorHeaderBarProps) {
+  const {
+    stages,
+    activeStageId,
+    setActiveStage,
+    pageSize,
+    konvaStageRef,
+    setKonvaStageRef,
+  } = useEditorStore();
   const activeStage = stages.find((s) => s.id === activeStageId);
+
+  const user = useQuery(api.users.viewer);
+
+  useEffect(() => {
+    if (activeStage) {
+      canvasInstanceRef.current?.batchDraw();
+    }
+  }, [activeStage?.backgroundColor, activeStage?.width, activeStage?.height]);
 
   return (
     <header className="h-14 w-full bg-background border-b border-border px-6 flex items-center justify-between z-40 select-none">
@@ -363,13 +400,58 @@ export function EditorHeaderBar() {
             </Select>
           </div>
         )}
+        {/* Export Action Triggers Group UI */}
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">Export</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-40" align="start">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => {
+                  if (!canvasInstanceRef?.current) {
+                    toast.error("Export canceled: Active canvas not found.");
+                    return;
+                  }
+                  exportCanvasWorkspace(canvasInstanceRef.current, { format: "png" });
+                }} >
+                  <BsFiletypePng className="h-3 w-3 mr-2" />
+                  Export as png
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => {
+                  if (!canvasInstanceRef?.current) {
+                    toast.error("Export canceled: Active canvas not found.");
+                    return;
+                  }
+                  exportCanvasWorkspace(canvasInstanceRef.current, { format: "jpeg" });
+                }}>
+                  <BsFiletypeJpg  className="h-3 w-3 mr-2" />
+                  Export as jpg
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => {
+                  if (!canvasInstanceRef?.current) {
+                    toast.error("Export canceled: Active canvas not found.");
+                    return;
+                  }
+                  exportCanvasWorkspace(canvasInstanceRef.current, { format: "pdf" });
+                }}>
+                  <BsFiletypePdf className="h-3 w-3 mr-2" />
+                  Export as pdf
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* Center Action Zone: Dimensional Display + Integrated Undo/Redo Engine */}
       <div className="flex items-center gap-4">
         <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-muted border border-border/50 rounded-md text-[11px] font-mono text-muted-foreground">
           <Monitor className="h-3 w-3 text-muted-foreground/70" />
-          <span>Canvas</span>
           <span className="font-bold text-foreground">
             {activeStage ? activeStage.width : pageSize.width}px
           </span>
@@ -384,12 +466,17 @@ export function EditorHeaderBar() {
 
       <div className="flex items-center gap-3">
         <CanvasNewPageDialog />
+        <ProfileMenu ImageSrc={user?.image || ""} Name={String(user?.name) || ""} Email={user?.email || ""} />
       </div>
     </header>
   );
 }
 
-const Editor = () => {
+const Editor = ({
+  canvasInstanceRef,
+}: {
+  canvasInstanceRef: React.RefObject<any>;
+}) => {
   const {
     pageSize,
     stages,
@@ -397,12 +484,29 @@ const Editor = () => {
     updateLayer,
     selectedLayerId,
     setSelectedLayerId,
+    modifyLayerProperties,
   } = useEditorStore();
 
-  const stageRef = useRef<any>(null);
+  const setKonvaStageRef = useEditorStore((state) => state.setKonvaStageRef);
+  const isShiftPressed = useShiftKey();
+  const [guides, setGuides] = useState<
+    Array<{ x1: number; y1: number; x2: number; y2: number }>
+  >([]);
+  const activeStage = stages.find((s) => s.id === activeStageId);
+  const layers = activeStage?.layers ?? [];
+
   const transformerRef = useRef<any>(null);
 
   const currentStageInstance = stages.find((s) => s.id === activeStageId);
+
+  useEffect(() => {
+    // Keep the global store ref in sync with the mounted stage ref
+    try {
+      setKonvaStageRef(canvasInstanceRef?.current ?? null);
+    } catch (e) {
+      // ignore
+    }
+  }, [canvasInstanceRef?.current, setKonvaStageRef]);
 
   const displayWidth = currentStageInstance
     ? currentStageInstance.width
@@ -415,7 +519,7 @@ const Editor = () => {
     : "#ffffff";
 
   useEffect(() => {
-    if (!transformerRef.current || !stageRef.current) return;
+    if (!transformerRef.current || !canvasInstanceRef.current) return;
 
     if (!selectedLayerId) {
       transformerRef.current.nodes([]);
@@ -423,7 +527,9 @@ const Editor = () => {
       return;
     }
 
-    const selectedNode = stageRef.current.findOne(`#${selectedLayerId}`);
+    const selectedNode = canvasInstanceRef.current.findOne(
+      `#${selectedLayerId}`,
+    );
 
     if (selectedNode) {
       transformerRef.current.nodes([selectedNode]);
@@ -442,7 +548,14 @@ const Editor = () => {
   };
 
   return (
-    <div className="flex-1 h-full bg-muted/40 overflow-auto relative flex flex-col items-center justify-center p-12 custom-grid-background">
+    <div
+      className={
+        "flex-1 h-full overflow-auto relative flex flex-col items-center justify-center p-12 custom-grid-background " +
+        (currentStageInstance?.backgroundColor == "#ffffff"
+          ? "bg-black"
+          : "bg-white")
+      }
+    >
       <div
         className="border border-border/80 rounded-sm overflow-hidden bg-background shadow-lg"
         style={{ width: `${displayWidth}px`, height: `${displayHeight}px` }}
@@ -451,7 +564,7 @@ const Editor = () => {
           <Stage
             width={displayWidth}
             height={displayHeight}
-            ref={stageRef}
+            ref={canvasInstanceRef}
             onMouseDown={handleStageBackgroundClick}
             onTouchStart={handleStageBackgroundClick}
           >
@@ -470,13 +583,24 @@ const Editor = () => {
                   onDragMove: (e: any) => {
                     const target = e.target;
                     // Local drag snapping layout alignment configurations
-                    const snappedX =
+                    const snappedXEle =
                       Math.round(target.x() / GRID_SIZE) * GRID_SIZE;
-                    const snappedY =
+                    const snappedYEle =
                       Math.round(target.y() / GRID_SIZE) * GRID_SIZE;
 
-                    target.x(snappedX);
-                    target.y(snappedY);
+                    const currentBounds = {
+                      id: layer.id,
+                      x: target.x(),
+                      y: target.y(),
+                      width: target.width(),
+                      height: target.height(),
+                    };
+
+                    if (!isShiftPressed) {
+                      target.x(snappedXEle);
+                      target.y(snappedYEle);
+                      return;
+                    }
                   },
                   onDragEnd: (e: any) => {
                     const target = e.target;
@@ -506,6 +630,7 @@ const Editor = () => {
 
                 const handleSelect = (e: any) => {
                   e.cancelBubble = true;
+
                   setSelectedLayerId(layer.id);
                 };
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import CanvasStateProvider from "@/providers/CanvasStateProvider";
+import { Toaster } from "@/components/ui/sonner";
 import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import { ConvexClientProvider } from "@/providers/ConvexClientProvider";
 
@@ -39,6 +40,7 @@ export default function RootLayout({
           <ConvexClientProvider>
             <CanvasStateProvider>{children}</CanvasStateProvider>
           </ConvexClientProvider>
+          <Toaster />
         </body>
       </html>
     </ConvexAuthNextjsServerProvider>

@@ -9,7 +9,7 @@ export interface CanvasLayer {
   width: number;
   height: number;
   fill?: string; // For vector shapes or solid colors
-  src?: string;  // High-res URL path for Unsplash imagery targets
+  src?: string; // High-res URL path for Unsplash imagery targets
   text?: string; // Custom content string if type is text
   fontFamily?: string;
   fontWeight?: string;
@@ -68,11 +68,16 @@ interface EditorStore {
   setPageSize: (width: number, height: number) => void;
   setCanvasBg: (color: string) => void;
   applyPreset: (name: string) => void;
+
+  // align grid mode
+  alignGridMode: boolean;
+  setAlignGridMode: (active: boolean) => void;
+
   selectedLayerId: string | null;
   setSelectedLayerId: (id: string | null) => void;
 
   // History Core Stacks
-  past: StageInstance[][];   // Matrix tracking snapshot historical versions of the stages array
+  past: StageInstance[][]; // Matrix tracking snapshot historical versions of the stages array
   future: StageInstance[][]; // Matrix tracking undone states available to restore
 
   // History Control Mechanisms
@@ -88,6 +93,12 @@ interface EditorStore {
     height: number;
     bgColor: string;
   }) => void;
+
+  // ref
+  konvaStageRef: null, // Holds the live global node instance
+
+  // Setter action
+  setKonvaStageRef: (ref: any) => void,
 
   // Layer Manipulation Engine
   addLayerToActiveStage: (layerData: Partial<CanvasLayer>) => void;
@@ -113,7 +124,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   selectedLayerId: null,
   past: [],
   future: [],
-  
+  alignGridMode: false,
+  konvaStageRef: null,
+  setKonvaStageRef: (ref) => set({ konvaStageRef: ref }),
+  setAlignGridMode: (active) => set({ alignGridMode: active }),
   setSelectedLayerId: (id) => set({ selectedLayerId: id }),
 
   setSelectedTool: (tool) => set({ selectedTool: tool }),
@@ -192,7 +206,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (!state.activeStageId) return state;
 
       const currentSnapshot = cloneStages(state.stages);
-      
+
       const updatedStages = state.stages.map((stage) => {
         if (stage.id !== state.activeStageId) return stage;
 
@@ -227,7 +241,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateLayer: (layerId, updates) =>
     set((state) => {
       const currentSnapshot = cloneStages(state.stages);
-      
+
       const updatedStages = state.stages.map((stage) => {
         if (stage.id !== state.activeStageId) return stage;
         return {
@@ -258,7 +272,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         if (idx === -1) return stage;
 
         // Clamp newIndex
-        const boundedIndex = Math.max(0, Math.min(newIndex, stage.layers.length - 1));
+        const boundedIndex = Math.max(
+          0,
+          Math.min(newIndex, stage.layers.length - 1),
+        );
 
         const layersCopy = stage.layers.slice();
         const [moved] = layersCopy.splice(idx, 1);
@@ -324,7 +341,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         past: [...state.past, currentSnapshot],
         future: [],
         stages: updatedStages,
-        selectedLayerId: state.selectedLayerId === layerId ? null : state.selectedLayerId,
+        selectedLayerId:
+          state.selectedLayerId === layerId ? null : state.selectedLayerId,
       };
     }),
 
