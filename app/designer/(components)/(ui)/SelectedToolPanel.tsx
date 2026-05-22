@@ -58,32 +58,19 @@ import { api } from "@/convex/_generated/api";
 import {
   DESIGNER_TEMPLATES,
   DesignerTemplateLibrary,
+  type DesignerTemplate,
   materializeTemplateLayers,
 } from "@/components/designer-template-library";
+import {
+  fetchUnsplashPhotos as loadUnsplashPhotos,
+  type UnsplashPhoto,
+  type UnsplashFilterState,
+} from "../../../../lib/unsplash-cache";
 
 /* ==========================================
    TYPES & INTERFACES
    ========================================== */
-interface FilterState {
-  color: string | null;
-  orientation: "landscape" | "portrait" | "squarish" | null;
-}
-
-interface UnsplashPhoto {
-  id: string;
-  width: number;
-  height: number;
-  alt_description: string | null;
-  urls: {
-    regular: string;
-    small: string;
-  };
-  user?: {
-    name: string;
-    links?: { html: string };
-    profile_image?: { small: string };
-  };
-}
+type FilterState = UnsplashFilterState;
 
 /* ==========================================
    1. TEMPLATES PANEL
@@ -98,7 +85,7 @@ export const TemplatesPanel = () => {
   } = useEditorStore();
 
   const applyTemplate = useCallback(
-    (template: (typeof DESIGNER_TEMPLATES)[number]) => {
+    (template: DesignerTemplate) => {
       const hasActiveStage = Boolean(activeStageId && stages.length > 0);
 
       if (!hasActiveStage) {
@@ -108,6 +95,18 @@ export const TemplatesPanel = () => {
           bgColor: template.canvasBackground,
         });
         setCanvasBg(template.canvasBackground);
+      }
+
+      if (template.imageUrl) {
+        addLayerToActiveStage({
+          type: "image",
+          src: template.imageUrl,
+          x: 0,
+          y: 0,
+          width: template.canvas.width,
+          height: template.canvas.height,
+          rotation: 0,
+        });
       }
 
       materializeTemplateLayers(template).forEach((layerBlueprint) => {
@@ -211,7 +210,7 @@ export const TextPanel = () => {
     <div className="w-full h-full bg-background flex flex-col select-none">
       <div className="py-3 px-4 flex items-center justify-between border-b border-border/50">
         <span className="text-xs text-muted-foreground font-medium tracking-wider uppercase">
-          Typography
+          Text
         </span>
       </div>
 
@@ -1004,28 +1003,18 @@ export const PhotosPanel = () => {
       if (selectedTool !== "photos") return null;
       setLoading(true);
       try {
-        const res = await fetch("/api/unplash", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            search: query,
-            filters: {
-              color: currentFilters.color,
-              orientation: currentFilters.orientation,
-            },
-          }),
+        const normalizedData = await loadUnsplashPhotos({
+          search: query,
+          filters: currentFilters,
+          limit: 12,
         });
-        if (!res.ok) throw new Error("Failed to pull matching dataset");
-        const data = await res.json();
-        const normalizedData = Array.isArray(data) ? data : [];
         if (shouldSetState) {
           setImages(normalizedData);
         }
         return normalizedData;
       } catch (error) {
-        console.error("Error fetching photos:", error);
         if (shouldSetState) {
-          setImages([]);
+          setImages((prev: UnsplashPhoto[] | null) => prev ?? []);
         }
         return [];
       } finally {
@@ -1047,7 +1036,7 @@ export const PhotosPanel = () => {
   };
 
   const updateFilter = (type: keyof FilterState, value: any) => {
-    setFilters((prev) => ({ ...prev, [type]: value }));
+    setFilters((prev: FilterState) => ({ ...prev, [type]: value }));
   };
 
   function handlePhotoSelect(photo: UnsplashPhoto) {
@@ -1544,7 +1533,7 @@ function PhotoEditorPanel() {
    ========================================== */
 const SelectedToolPanel = () => {
   const { selectedTool } = useEditorStore();
-  const [isOpen, setIsOpen] = useState<boolean>(true);
+  const {isOpen, setIsOpen} = useEditorStore()
 
   const panelMap: Record<string, React.ComponentType> = {
     templates: TemplatesPanel,
@@ -1584,7 +1573,7 @@ const SelectedToolPanel = () => {
         type="button"
         variant="outline"
         size="icon"
-        onClick={() => setIsOpen((p) => !p)}
+        onClick={() => setIsOpen(!isOpen)}
         className="absolute top-6 -translate-y-1/2 -right-4 h-8 w-4 bg-black  hover:bg-black/90 rounded-l-none rounded-r-md z-50 pointer-events-auto"
         title={isOpen ? "Collapse Panel" : "Expand Panel"}
       >

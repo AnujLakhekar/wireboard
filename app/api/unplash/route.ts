@@ -54,20 +54,22 @@ export async function POST(request: Request) {
   }
 
   try {
-    // 1. Parse body and fix the 'filters' typo
-    const { filters, search } = await request.json();
+    const body = await request.json();
+    const filters = body?.filters;
+    const search = typeof body?.search === "string" ? body.search : "";
+    const requestedLimit = Number(body?.limit);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 30)
+      : 10;
 
-    // 2. Determine endpoint: Default to random if no search query exists
-    let apiUrl = "https://api.unsplash.com/photos/random?count=10";
+    let apiUrl = `https://api.unsplash.com/photos/random?count=${limit}`;
     
     if (search && search.trim() !== "") {
       const searchParams = new URLSearchParams({
         query: search.trim(),
-        per_page: "10",
+        per_page: String(limit),
       });
 
-      // 3. Append optional filters if supported by Unsplash Search API
-      // (Unsplash supports 'orientation', 'color', and 'order_by' on search)
       if (filters?.orientation) {
         searchParams.append("orientation", filters.orientation);
       }
@@ -78,7 +80,6 @@ export async function POST(request: Request) {
       apiUrl = `https://api.unsplash.com/search/photos?${searchParams.toString()}`;
     }
 
-    // 4. Execute request
     const res = await fetch(apiUrl, {
       headers: {
         Authorization: `Client-ID ${unsplashApiKey}`,
@@ -95,8 +96,6 @@ export async function POST(request: Request) {
 
     const data = await res.json();
 
-    // 5. Unsplash Search API returns an object format: { total: X, total_pages: Y, results: [...] }
-    // We normalize the response data so your frontend receives a clean, consistent array either way.
     const normalizedImages = search ? (data.results || []) : data;
 
     return NextResponse.json(normalizedImages, { status: 200 });

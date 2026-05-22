@@ -69,6 +69,9 @@ interface EditorStore {
   setCanvasBg: (color: string) => void;
   applyPreset: (name: string) => void;
 
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void; // Global toggle for inspector panel visibility (can be extended for multiple panels in the future)
+
   // align grid mode
   alignGridMode: boolean;
   setAlignGridMode: (active: boolean) => void;
@@ -95,10 +98,10 @@ interface EditorStore {
   }) => void;
 
   // ref
-  konvaStageRef: null, // Holds the live global node instance
+  konvaStageRef: null; // Holds the live global node instance
 
   // Setter action
-  setKonvaStageRef: (ref: any) => void,
+  setKonvaStageRef: (ref: any) => void;
 
   // Layer Manipulation Engine
   addLayerToActiveStage: (layerData: Partial<CanvasLayer>) => void;
@@ -126,6 +129,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   future: [],
   alignGridMode: false,
   konvaStageRef: null,
+  isOpen: true,
+  setIsOpen: (isOpen) => set({ isOpen }),
   setKonvaStageRef: (ref) => set({ konvaStageRef: ref }),
   setAlignGridMode: (active) => set({ alignGridMode: active }),
   setSelectedLayerId: (id) => set({ selectedLayerId: id }),

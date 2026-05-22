@@ -12,6 +12,7 @@ const ObjectController = () => {
     modifyLayerProperties, // Assumed mutation action in your Zustand store
     deleteLayer, // Assumed deletion action in your Zustand store
     setSelectedTool, // Action to switch active tool in the editor
+    setIsOpen,
   } = useEditorStore();
 
   const activeStage = stages.find((s) => s.id === activeStageId);
@@ -22,9 +23,11 @@ const ObjectController = () => {
     if (activeLayer.type === "text") {
       setSelectedTool("texteditor");
     } else if (activeLayer.type === "image") {
-      setSelectedTool("imageeditor");
+      setSelectedTool("photoeditor");
+    } else if (!selectedLayerId) {
+      setIsOpen(false); // Open the panel for non-text/image layers but do not switch tool
     } else {
-      setSelectedTool("templates");
+      setIsOpen(false);
     }
   }, [activeLayer, setSelectedTool]);
 
