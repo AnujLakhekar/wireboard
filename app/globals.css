@@ -140,3 +140,8 @@
 .roateimage {
   translate: rotate(10deg);
 }
+
+
+#liveblocks-badge {
+  display: none;
+}
