@@ -23,7 +23,11 @@ export function useCanvasPersistence(setObjects: (data: any[]) => void) {
     yShapes.observe(observer);
 
     indexeddbProvider.on("synced", () => {
-      observer(); // Initial state sync once DB is loaded
+      // Only hydrate from IndexedDB if there is actually canvas data saved.
+      // This avoids wiping the in-memory drawing that was just loaded from the selected canvas.
+      if (yShapes.size > 0) {
+        observer();
+      }
       setIsInitialized(true);
       console.log("Persistence synced from IndexedDB");
     });

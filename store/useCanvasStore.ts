@@ -1,11 +1,11 @@
 import { create } from "zustand";
 
-interface CanvasObject {
+export interface CanvasObject {
   id: string;
   [key: string]: any;
 }
 
-interface CanvasState {
+export interface CanvasState {
   objects: CanvasObject[];
   objectsById: Record<string, CanvasObject>;
   selectedIds: string[];

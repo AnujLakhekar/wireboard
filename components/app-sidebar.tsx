@@ -31,6 +31,7 @@ import {
   MenubarSubTrigger,
   MenubarTrigger,
 } from "@/components/ui/menubar";
+import SettingsSheet from "@/components/settings/SettingsSheet";
 import {
   Sidebar,
   SidebarContent,
@@ -244,7 +245,8 @@ export function AppSidebar() {
             </p>
           </div>
 
-          <Menubar className="h-auto border-0 bg-transparent p-0 shadow-none">
+          <div className="flex items-center gap-2">
+            <Menubar className="h-auto border-0 bg-transparent p-0 shadow-none">
             <MenubarMenu>
               <MenubarTrigger className="grid size-7 place-items-center rounded-md text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground data-[state=open]:bg-sidebar-accent">
                 <ChevronsUpDown className="size-4" />
@@ -325,7 +327,16 @@ export function AppSidebar() {
                 </MenubarItem>
               </MenubarContent>
             </MenubarMenu>
-          </Menubar>
+            </Menubar>
+            {/* Settings sheet trigger */}
+            <div>
+              <SettingsSheet>
+                <Button className="ml-2" variant="ghost" size="sm">
+                  <Palette className="size-4 mr-2" /> Settings
+                </Button>
+              </SettingsSheet>
+            </div>
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

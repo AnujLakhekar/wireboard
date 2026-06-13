@@ -22,7 +22,7 @@ import {
 } from "react-konva";
 import { KonvaEventObject } from "konva/lib/Node";
 import Konva from "konva";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 // Shadcn UI Context Menu
 import {
@@ -108,6 +108,11 @@ import gsap from "gsap";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import ProfileMenu from "@/components/ProfileMenu";
+import { Room } from "@/app/Room";
+import Live from "@/components/Live/Live";
+import { Params } from "next/dist/server/request/params";
+import AvatarContainer from "@/components/ui/AvatarContainer";
+import { useLiveStore } from "@/store/useLiveStroe";
 
 const spriteCodeBlockSample = `function SpriteBehavior(sprite, frame, time) {
   const radius = 100;
@@ -239,7 +244,7 @@ const Controller = ({
   return (
     <div
       ref={dropdownRef}
-      className="fixed bottom-4 left-1/2 z-40 w-[16vw] -translate-x-1/2"
+      className="fixed bottom-4 left-1/2 z-40 sm:w-[30vw] md:w-[30vw] lg:w-[16vw] -translate-x-1/2"
     >
       <Card className="overflow-visible rounded-2xl border border-muted/70 bg-background backdrop-blur-xl">
         <CardContent className="p-0">
@@ -812,7 +817,9 @@ const SpriteManager = ({
     }
   }, [isOpen, spriteObj?.id, spriteObj?.src]);
 
-  const handleSpriteFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSpriteFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -1996,9 +2003,9 @@ function Canvas({
         const resolvedImageUrl = imageUrl;
         addImageFromUrl(resolvedImageUrl, pointer, storageId);
       } catch (err) {
-          console.error("Drop upload error:", err);
-          toast.error("Failed to upload image. Please try again.");
-        }
+        console.error("Drop upload error:", err);
+        toast.error("Failed to upload image. Please try again.");
+      }
       return;
     }
 
@@ -2104,7 +2111,8 @@ function Canvas({
 
     // Find image objects with storageId and request storage deletion
     const imagesToDelete = objects.filter(
-      (o: any) => selectedIds.includes(o.id) && o.type === "image" && o.storageId,
+      (o: any) =>
+        selectedIds.includes(o.id) && o.type === "image" && o.storageId,
     );
 
     if (imagesToDelete.length > 0) {
@@ -2119,7 +2127,9 @@ function Canvas({
       });
     }
 
-    setObjects((prev: any[]) => prev.filter((o) => !selectedIds.includes(o.id)));
+    setObjects((prev: any[]) =>
+      prev.filter((o) => !selectedIds.includes(o.id)),
+    );
     setSelectedIds([]);
   };
 
@@ -2627,7 +2637,6 @@ function Canvas({
               />
             )}
           </Layer>
-
         </Stage>
       </ContextMenuTrigger>
 
@@ -3408,9 +3417,9 @@ const CanvasBoard = () => {
 
   const user = useQuery(api.users.viewer);
 
-  useEffect(() => {
-    console.log("Current user:", user);
-  }, [user]);
+  const { others } = useLiveStore();
+
+  console.log(others)
 
   return (
     <>
@@ -3494,11 +3503,9 @@ const CanvasBoard = () => {
           </button>
 
           {user ? (
-            <ProfileMenu
-              ImageSrc={user.image || ""}
-              Name={user.name || ""}
-              Email={user.email || ""}
-            />
+            <div>
+              <AvatarContainer users={others} />
+            </div>
           ) : (
             <a
               href="/login"
@@ -3515,9 +3522,26 @@ const CanvasBoard = () => {
 };
 
 const Page = () => {
+  const params = useParams();
+  const { setRoomId, roomId } = useLiveStore();
+
+  useEffect(() => {
+    if (params.roomId) {
+      console.log("Setting room ID to:", params.roomId);
+      setRoomId(params.roomId);
+    }
+  }, [params.roomId]);
+
+  if (!roomId) {
+    return <div>no room selected</div>;
+  }
+
   return (
     <>
-      <CanvasBoard />
+      <Room roomId={roomId.toString()}>
+        <Live />
+        <CanvasBoard />
+      </Room>
     </>
   );
 };
